@@ -230,13 +230,7 @@ exports.forgotPassword = async (req, res) => {
     console.log("✅ Reset token saved for:", user.email);
 
     // Try to send email (won't break if fails)
-    try {
-      await sendPasswordResetEmail(email, resetToken, user.name);
-      console.log("✅ Password reset email sent");
-    } catch (emailError) {
-      console.warn("⚠️ Email sending failed:", emailError.message);
-      // Continue even if email fails - we'll still return the token for testing
-    }
+   sendPasswordResetEmail(email, resetToken, user.name).then(() => console.log(":white_check_mark: Password reset email sent")).catch((emailError) => console.warn(":warning: Email sending failed:", emailError.message));
 
     // ✅ Return success (resetToken only included outside production, for local testing)
     const responseBody = {
