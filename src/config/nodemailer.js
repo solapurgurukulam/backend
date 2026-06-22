@@ -1,31 +1,31 @@
-const { Resend } = require('resend');
- 
-const resend = new Resend(process.env.RESEND_API_KEY);
- 
-const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@yourdomain.com';
- 
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT),
+    secure: true,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
 const sendEmail = async (to, subject, html) => {
     try {
-        const { data, error } = await resend.emails.send({
-            from: `Pandit Ji <${FROM_EMAIL}>`,
+        const info = await transporter.sendMail({
+            from: `"Pandit Ji" <${process.env.EMAIL_FROM}>`,
             to,
             subject,
             html,
         });
- 
-        if (error) {
-            console.error('Email sending error:', error);
-            throw new Error('Failed to send email');
-        }
- 
-        console.log('✅ Email sent:', data?.id);
-        return data;
+        console.log('Email sent:', info.messageId);
+        return info;
     } catch (error) {
         console.error('Email sending error:', error);
         throw new Error('Failed to send email');
     }
 };
- 
+
 const sendVerificationEmail = async (email, token, name) => {
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
     const html = `
@@ -40,7 +40,7 @@ const sendVerificationEmail = async (email, token, name) => {
   `;
     return sendEmail(email, 'Verify Your Email - Pandit Ji', html);
 };
- 
+
 const sendPasswordResetEmail = async (email, token, name) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
     const html = `
@@ -55,5 +55,5 @@ const sendPasswordResetEmail = async (email, token, name) => {
   `;
     return sendEmail(email, 'Reset Your Password - Pandit Ji', html);
 };
- 
+
 module.exports = { sendEmail, sendVerificationEmail, sendPasswordResetEmail };
