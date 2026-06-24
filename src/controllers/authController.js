@@ -6,7 +6,7 @@ const Token = require("../models/Token");
 const {
   sendVerificationEmail,
   sendPasswordResetEmail,
-} = require("../config/nodemailer");
+} = require("../utils/sendEmail")
 const { uploadToCloudinary } = require("../config/cloudinary");
 
 const generateTokens = async (userId) => {

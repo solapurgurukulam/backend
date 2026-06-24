@@ -60,13 +60,13 @@ const createAdmin = async (req, res) => {
             });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 12);
+        
 
         const user = await User.create({
             name: name.trim(),
             email: email.toLowerCase().trim(),
             phone: phone || '',
-            password: hashedPassword,
+            password: password,
             role: role === 'super_admin' ? 'super_admin' : 'admin',
             isVerified: true,
             isBlocked: false

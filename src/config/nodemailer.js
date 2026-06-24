@@ -1,33 +1,19 @@
-const axios = require('axios');
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async (to, subject, html) => {
     try {
-        // We use a standard HTTP POST request over secure port 443 to bypass Render's firewall block
-        const response = await axios.post(
-            'https://api.brevo.com/v3/smtp/email',
-            {
-                sender: { 
-                    name: "Pandit Ji", 
-                    email: process.env.EMAIL_FROM || "solapurgurukulal@gmail.com" 
-                },
-                to: [{ email: to }],
-                subject: subject,
-                htmlContent: html
-            },
-            {
-                headers: {
-                    'accept': 'application/json',
-                    'api-key': process.env.BREVO_API_KEY,
-                    'content-type': 'application/json'
-                }
-            }
-        );
-
-        console.log('✅ Email sent successfully via Brevo API:', response.data.messageId || 'Success');
-        return response.data;
+        const data = await resend.emails.send({
+            from: 'Pandit Ji <onboarding@resend.dev>',
+            to,
+            subject,
+            html
+        });
+        console.log('✅ Email sent via Resend:', data.id);
+        return data;
     } catch (error) {
-        console.error('❌ Email sending error via API:', error.response?.data || error.message);
-        throw new Error('Failed to send email via API');
+        console.error('❌ Resend email error:', error);
+        throw new Error('Failed to send email');
     }
 };
 
