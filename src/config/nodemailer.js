@@ -3,12 +3,18 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: parseInt(process.env.EMAIL_PORT),
-    // FIXED: Dynamically sets 'secure'. Port 465 uses true, Port 587 (most common) uses false.
-    secure: parseInt(process.env.EMAIL_PORT) === 465, 
+    // Dynamically sets secure based on the port (465 requires true, 587 requires false)
+    secure: parseInt(process.env.EMAIL_PORT) === 465,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+    tls: {
+        // Prevents strict server certificate errors from blocking the email
+        rejectUnauthorized: false
+    },
+    // Adds a 10-second timeout so your frontend doesn't spin forever
+    connectionTimeout: 10000 
 });
 
 const sendEmail = async (to, subject, html) => {
