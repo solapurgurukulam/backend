@@ -5,6 +5,7 @@ const {
     getAllAdmins,
     searchUser,
     createAdmin,
+    registerNewAdmin, // <-- ADDED: Import the new function
     updateAdmin,
     deleteAdmin,
 } = require('../controllers/adminController');
@@ -15,10 +16,13 @@ router.use(authorize('super_admin'));
 
 // Admin listing and creation
 router.get('/all', getAllAdmins);
-router.post('/create', createAdmin);
+router.post('/create', createAdmin); // Assuming this promotes an existing user
+
+// <-- ADDED THIS ROUTE: Catches the request from your React frontend
+router.post('/register-new', registerNewAdmin); 
 
 // Existing user management - Search user by email or phone
-router.get('/search-user', searchUser); // GET /api/admin/search-user?email=xxx&phone=xxx
+router.get('/search-user', searchUser); 
 
 // Admin CRUD operations
 router.put('/:id', updateAdmin);

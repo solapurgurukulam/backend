@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const bcrypt = require('bcryptjs'); // <-- ADDED: Required for hashing the new admin's password
 
 // Get all admins (super_admin only)
 const getAllAdmins = async (req, res) => {
@@ -79,7 +80,7 @@ const searchUser = async (req, res) => {
     }
 };
 
-// Create/Promote admin - Changes role from user to admin
+// Create/Promote admin - Changes role from existing user to admin
 const createAdmin = async (req, res) => {
     try {
         console.log('Create admin request body:', req.body);
@@ -164,6 +165,60 @@ const createAdmin = async (req, res) => {
         res.status(500).json({
             success: false,
             message: error.message
+        });
+    }
+};
+
+// <-- ADDED THIS WHOLE FUNCTION: Register a brand-new admin from scratch -->
+const registerNewAdmin = async (req, res) => {
+    try {
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Super admin only.'
+            });
+        }
+
+        const { name, email, phone, password, role } = req.body;
+
+        // 1. Check if user already exists
+        const userExists = await User.findOne({ email: email.toLowerCase().trim() });
+        if (userExists) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'A user with this email already exists' 
+            });
+        }
+
+        // 2. Hash the password before saving to database
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // 3. Create the new user with the admin/super_admin role
+        const newAdmin = await User.create({
+            name,
+            email: email.toLowerCase().trim(),
+            phone: phone || '',
+            password: hashedPassword,
+            role: role || 'admin'
+        });
+
+        res.status(201).json({ 
+            success: true, 
+            message: 'Admin created successfully', 
+            data: {
+                _id: newAdmin._id,
+                name: newAdmin.name,
+                email: newAdmin.email,
+                role: newAdmin.role
+            } 
+        });
+
+    } catch (error) {
+        console.error("Register new admin error:", error);
+        res.status(500).json({ 
+            success: false, 
+            message: error.message || 'Server error while creating admin' 
         });
     }
 };
@@ -283,6 +338,7 @@ module.exports = {
     getAllAdmins,
     searchUser,
     createAdmin,
+    registerNewAdmin, // <-- ADDED: Export the new function so the router can use it
     updateAdmin,
     deleteAdmin
 };
