@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'admin', 'super_admin'],
         default: 'user',
     },
-    // ✅ NEW: Track if user was previously an admin (for blocked admins)
+    // ✅ Track if user was previously an admin (for blocked admins)
     wasAdmin: {
         type: Boolean,
         default: false,
@@ -68,19 +68,16 @@ const userSchema = new mongoose.Schema({
     timestamps: true,
 });
 
-// Hash password before saving
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
     this.password = await bcrypt.hash(this.password, 12);
     next();
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Check if password changed after JWT issued
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     if (this.passwordChangedAt) {
         const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
@@ -89,10 +86,9 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     return false;
 };
 
-// Indexes for better query performance
 userSchema.index({ email: 1 });
 userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
-userSchema.index({ isBlocked: 1, wasAdmin: 1 }); // ✅ Added for blocked admin queries
+userSchema.index({ isBlocked: 1, wasAdmin: 1 });
 
 module.exports = mongoose.model('User', userSchema);

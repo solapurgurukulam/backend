@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendAdminPromotionEmail, sendVerificationEmail } = require('../utils/sendEmail');
 
-// Get all admins (super_admin only) - Includes blocked admins
+// Get all admins - INCLUDES BLOCKED ADMINS
 const getAllAdmins = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -13,11 +13,11 @@ const getAllAdmins = async (req, res) => {
             });
         }
 
-        // Get all admins + blocked users who were previously admins
+        // ✅ Get ALL admins + blocked users who were previously admins
         const admins = await User.find({
             $or: [
                 { role: { $in: ['admin', 'super_admin'] } },
-                { wasAdmin: true, isBlocked: true } // Blocked users who were admins
+                { isBlocked: true, wasAdmin: true } // ✅ Include blocked admins
             ]
         }).select('-password');
 
@@ -34,7 +34,7 @@ const getAllAdmins = async (req, res) => {
     }
 };
 
-// Create new admin (super_admin only)
+// Create new admin
 const createAdmin = async (req, res) => {
     try {
         console.log('Create admin request body:', req.body);
@@ -77,7 +77,6 @@ const createAdmin = async (req, res) => {
             wasAdmin: false
         });
 
-        // Send admin promotion email
         try {
             await sendAdminPromotionEmail(user.email, user.name);
             console.log('✅ Admin promotion email sent to:', user.email);
@@ -112,7 +111,7 @@ const createAdmin = async (req, res) => {
     }
 };
 
-// Add existing user as admin (super_admin only)
+// Add existing user as admin
 const addAdmin = async (req, res) => {
     try {
         console.log('Add admin request body:', req.body);
@@ -167,12 +166,10 @@ const addAdmin = async (req, res) => {
             });
         }
 
-        // Promote to admin
         existingUser.role = 'admin';
         existingUser.wasAdmin = false;
         await existingUser.save();
 
-        // Send admin promotion email
         try {
             await sendAdminPromotionEmail(existingUser.email, existingUser.name);
             console.log('✅ Admin promotion email sent to:', existingUser.email);
@@ -207,7 +204,7 @@ const addAdmin = async (req, res) => {
     }
 };
 
-// Search User by Email or Phone (super_admin only)
+// Search User by Email or Phone
 const searchUser = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -253,7 +250,7 @@ const searchUser = async (req, res) => {
     }
 };
 
-// Verify User - Send Verification Email (super_admin only)
+// Verify User - Send Verification Email
 const verifyUser = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -280,7 +277,6 @@ const verifyUser = async (req, res) => {
             });
         }
 
-        // Check if user has email
         if (!user.email) {
             return res.status(400).json({
                 success: false,
@@ -288,7 +284,6 @@ const verifyUser = async (req, res) => {
             });
         }
 
-        // Generate new verification token
         const emailVerificationToken = crypto.randomBytes(32).toString("hex");
         const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -296,7 +291,6 @@ const verifyUser = async (req, res) => {
         user.emailVerificationExpires = emailVerificationExpires;
         await user.save();
 
-        // Send verification email with proper error handling
         try {
             await sendVerificationEmail(user.email, emailVerificationToken, user.name);
             
@@ -307,7 +301,6 @@ const verifyUser = async (req, res) => {
         } catch (emailError) {
             console.error('❌ Failed to send verification email:', emailError.message);
             
-            // Revert the token if email fails
             user.emailVerificationToken = undefined;
             user.emailVerificationExpires = undefined;
             await user.save();
@@ -328,7 +321,7 @@ const verifyUser = async (req, res) => {
     }
 };
 
-// Update admin (super_admin only)
+// Update admin
 const updateAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -391,7 +384,7 @@ const updateAdmin = async (req, res) => {
     }
 };
 
-// Remove admin (demote to regular user) - super_admin only
+// Remove admin (demote to regular user)
 const removeAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -459,7 +452,7 @@ const removeAdmin = async (req, res) => {
     }
 };
 
-// Block admin (demote + block) - super_admin only
+// Block admin (demote + block) - SUPER ADMIN ONLY
 const blockAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -493,7 +486,7 @@ const blockAdmin = async (req, res) => {
             });
         }
 
-        // Mark that this user was an admin and block them
+        // ✅ Mark that this user was an admin and block them
         admin.wasAdmin = true;
         admin.role = 'user';
         admin.isBlocked = true;
@@ -506,7 +499,8 @@ const blockAdmin = async (req, res) => {
             phone: admin.phone,
             role: admin.role,
             isBlocked: admin.isBlocked,
-            wasAdmin: admin.wasAdmin
+            wasAdmin: admin.wasAdmin,
+            isVerified: admin.isVerified
         };
 
         res.status(200).json({
@@ -524,7 +518,7 @@ const blockAdmin = async (req, res) => {
     }
 };
 
-// Unblock user (optionally restore as admin) - super_admin only
+// Unblock user (optionally restore as admin)
 const unblockAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -547,7 +541,7 @@ const unblockAdmin = async (req, res) => {
 
         user.isBlocked = false;
 
-        // If user was previously an admin and we want to restore as admin
+        // ✅ If user was previously an admin and we want to restore
         if (restoreAsAdmin && user.wasAdmin === true) {
             if (!user.isVerified) {
                 return res.status(400).json({
@@ -589,7 +583,7 @@ const unblockAdmin = async (req, res) => {
     }
 };
 
-// Delete user (super_admin only)
+// Delete user
 const deleteAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
