@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 // Get all admins (super_admin only)
 const getAllAdmins = async (req, res) => {
@@ -27,16 +28,9 @@ const getAllAdmins = async (req, res) => {
     }
 };
 
-// Search user by email or phone
+// Search user by email or phone (ADDED FOR FRONTEND SYNC)
 const searchUser = async (req, res) => {
     try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
         const { email, phone } = req.query;
 
         if (!email && !phone) {
@@ -47,21 +41,15 @@ const searchUser = async (req, res) => {
         }
 
         const searchConditions = [];
-        if (email) {
-            searchConditions.push({ email: email.toLowerCase().trim() });
-        }
-        if (phone) {
-            searchConditions.push({ phone: phone.trim() });
-        }
+        if (email) searchConditions.push({ email: email.toLowerCase().trim() });
+        if (phone) searchConditions.push({ phone: phone.trim() });
 
-        const user = await User.findOne({
-            $or: searchConditions
-        }).select('-password');
+        const user = await User.findOne({ $or: searchConditions }).select('-password');
 
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found with this email or phone number'
+                message: 'User not found'
             });
         }
 
@@ -79,84 +67,49 @@ const searchUser = async (req, res) => {
     }
 };
 
-// Create/Promote admin - Changes role from existing user to admin
+// Create new admin from scratch (super_admin only)
 const createAdmin = async (req, res) => {
     try {
-        console.log('Create admin request body:', req.body);
+        const { name, email, phone, password, role } = req.body;
 
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
-        const { email, phone, role } = req.body;
-
-        // Validate input - at least email or phone is required
-        if (!email && !phone) {
+        if (!name || !email || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'Please provide either email or phone number'
+                message: 'Name, email and password are required'
             });
         }
 
-        const searchConditions = [];
-        if (email) {
-            searchConditions.push({ email: email.toLowerCase().trim() });
-        }
-        if (phone) {
-            searchConditions.push({ phone: phone.trim() });
-        }
-
-        // Check if user exists
-        let user = await User.findOne({
-            $or: searchConditions
+        const existingUser = await User.findOne({
+            $or: [{ email: email.toLowerCase().trim() }, { phone }]
         });
 
-        // If user doesn't exist, return error
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found with this email or phone number. User must be registered first.'
-            });
-        }
-
-        // Check if user is already an admin
-        if (user.role === 'admin' || user.role === 'super_admin') {
+        if (existingUser) {
             return res.status(400).json({
                 success: false,
-                message: `User is already an ${user.role}`
+                message: 'User already exists with this email or phone'
             });
         }
 
-        // Check if user is blocked
-        if (user.isBlocked) {
-            return res.status(400).json({
-                success: false,
-                message: 'Blocked users cannot be assigned as admin'
-            });
-        }
+        // Using plain password here because your User model pre-save hook handles bcrypt hashing
+        const user = await User.create({
+            name: name.trim(),
+            email: email.toLowerCase().trim(),
+            phone: phone || '',
+            password: password, 
+            role: role === 'super_admin' ? 'super_admin' : 'admin',
+            isVerified: true,
+            isBlocked: false
+        });
 
-        // PROMOTE USER TO ADMIN - Change role from 'user' to 'admin' or 'super_admin'
-        user.role = role === 'super_admin' ? 'super_admin' : 'admin';
-        user.isBlocked = false; // Ensure not blocked
-        await user.save();
-
-        const userResponse = {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            phone: user.phone,
-            role: user.role,
-            isBlocked: user.isBlocked,
-            createdAt: user.createdAt
-        };
-
-        res.status(200).json({
+        res.status(201).json({
             success: true,
-            message: 'User promoted to admin successfully',
-            data: userResponse
+            message: 'Admin created successfully',
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
         });
 
     } catch (error) {
@@ -168,52 +121,51 @@ const createAdmin = async (req, res) => {
     }
 };
 
-// Register a brand-new admin from scratch (FIXED: No double-hashing)
-const registerNewAdmin = async (req, res) => {
+// Promote existing user to admin (ADDED FOR FRONTEND SYNC)
+const promoteUser = async (req, res) => {
     try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
+        const { email, phone, role } = req.body;
+
+        const searchConditions = [];
+        if (email) searchConditions.push({ email: email.toLowerCase().trim() });
+        if (phone) searchConditions.push({ phone: phone.trim() });
+
+        const user = await User.findOne({ $or: searchConditions });
+
+        if (!user) {
+            return res.status(404).json({
                 success: false,
-                message: 'Access denied. Super admin only.'
+                message: 'User not found. They must register first.'
             });
         }
 
-        const { name, email, phone, password, role } = req.body;
-
-        // 1. Check if user already exists
-        const userExists = await User.findOne({ email: email.toLowerCase().trim() });
-        if (userExists) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'A user with this email already exists' 
+        if (user.role === 'admin' || user.role === 'super_admin') {
+            return res.status(400).json({
+                success: false,
+                message: `User is already an ${user.role}`
             });
         }
 
-        // 2. Create the new user with plain text password (Mongoose pre-save will hash it)
-        const newAdmin = await User.create({
-            name,
-            email: email.toLowerCase().trim(),
-            phone: phone || '',
-            password: password, // <-- FIXED: Passing plain password here
-            role: role || 'admin'
-        });
+        if (user.isBlocked) {
+            return res.status(400).json({
+                success: false,
+                message: 'Blocked users cannot be assigned as admin'
+            });
+        }
 
-        res.status(201).json({ 
-            success: true, 
-            message: 'Admin created successfully', 
-            data: {
-                _id: newAdmin._id,
-                name: newAdmin.name,
-                email: newAdmin.email,
-                role: newAdmin.role
-            } 
+        user.role = role || 'admin';
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'User promoted to admin successfully'
         });
 
     } catch (error) {
-        console.error("Register new admin error:", error);
-        res.status(500).json({ 
-            success: false, 
-            message: error.message || 'Server error while creating admin' 
+        console.error('Promote user error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };
@@ -221,32 +173,18 @@ const registerNewAdmin = async (req, res) => {
 // Update admin
 const updateAdmin = async (req, res) => {
     try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
         const { name, phone, role } = req.body;
         const adminId = req.params.id;
 
         const admin = await User.findById(adminId);
         if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: 'Admin not found'
-            });
+            return res.status(404).json({ success: false, message: 'Admin not found' });
         }
 
-        // Prevent changing the only Super Admin's role
         if (admin.role === 'super_admin' && role !== 'super_admin') {
             const superAdminCount = await User.countDocuments({ role: 'super_admin' });
             if (superAdminCount === 1) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Cannot change the only Super Admin\'s role'
-                });
+                return res.status(400).json({ success: false, message: 'Cannot change the only Super Admin\'s role' });
             }
         }
 
@@ -256,62 +194,33 @@ const updateAdmin = async (req, res) => {
 
         await admin.save();
 
-        const adminResponse = {
-            _id: admin._id,
-            name: admin.name,
-            email: admin.email,
-            phone: admin.phone,
-            role: admin.role,
-            isBlocked: admin.isBlocked
-        };
-
         res.status(200).json({
             success: true,
             message: 'Admin updated successfully',
-            data: adminResponse
+            data: { _id: admin._id, name: admin.name, role: admin.role }
         });
 
     } catch (error) {
-        console.error('Update admin error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Delete/Demote admin - Changes role from admin to user
+// Delete/Demote admin
 const deleteAdmin = async (req, res) => {
     try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
         const adminId = req.params.id;
 
         const admin = await User.findById(adminId);
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: 'Admin not found'
-            });
-        }
+        if (!admin) return res.status(404).json({ success: false, message: 'Admin not found' });
 
-        // Prevent demoting the only Super Admin
         if (admin.role === 'super_admin') {
             const superAdminCount = await User.countDocuments({ role: 'super_admin' });
             if (superAdminCount === 1) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Cannot demote the only Super Admin'
-                });
+                return res.status(400).json({ success: false, message: 'Cannot demote the only Super Admin' });
             }
         }
 
-        // DEMOTE ADMIN TO USER - Change role from 'admin' or 'super_admin' to 'user'
+        // Instead of deleting from DB entirely, we demote to user (safer)
         admin.role = 'user';
         await admin.save();
 
@@ -321,11 +230,39 @@ const deleteAdmin = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Delete admin error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Block admin
+const blockAdmin = async (req, res) => {
+    try {
+        const adminId = req.params.id;
+        const admin = await User.findById(adminId);
+        if (!admin) return res.status(404).json({ success: false, message: 'Admin not found' });
+        
+        if (admin.role === 'super_admin') return res.status(400).json({ success: false, message: 'Cannot block a Super Admin' });
+        
+        admin.isBlocked = true;
+        await admin.save();
+        res.status(200).json({ success: true, message: 'Admin blocked successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Unblock admin
+const unblockAdmin = async (req, res) => {
+    try {
+        const adminId = req.params.id;
+        const admin = await User.findById(adminId);
+        if (!admin) return res.status(404).json({ success: false, message: 'Admin not found' });
+        
+        admin.isBlocked = false;
+        await admin.save();
+        res.status(200).json({ success: true, message: 'Admin unblocked successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -333,7 +270,9 @@ module.exports = {
     getAllAdmins,
     searchUser,
     createAdmin,
-    registerNewAdmin,
+    promoteUser,
     updateAdmin,
-    deleteAdmin
+    deleteAdmin,
+    blockAdmin,
+    unblockAdmin
 };
