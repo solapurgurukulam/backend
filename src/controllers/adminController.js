@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendAdminPromotionEmail, sendVerificationEmail } = require('../utils/sendEmail');
 
-// Get all admins (super_admin only)
+// Get all admins (super_admin only) - Includes blocked admins
 const getAllAdmins = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -13,8 +13,12 @@ const getAllAdmins = async (req, res) => {
             });
         }
 
+        // Get all admins + blocked users who were previously admins
         const admins = await User.find({
-            role: { $in: ['admin', 'super_admin'] }
+            $or: [
+                { role: { $in: ['admin', 'super_admin'] } },
+                { wasAdmin: true, isBlocked: true } // Blocked users who were admins
+            ]
         }).select('-password');
 
         res.status(200).json({
@@ -69,7 +73,8 @@ const createAdmin = async (req, res) => {
             password: password,
             role: role === 'super_admin' ? 'super_admin' : 'admin',
             isVerified: true,
-            isBlocked: false
+            isBlocked: false,
+            wasAdmin: false
         });
 
         // Send admin promotion email
@@ -88,6 +93,7 @@ const createAdmin = async (req, res) => {
             role: user.role,
             isVerified: user.isVerified,
             isBlocked: user.isBlocked,
+            wasAdmin: user.wasAdmin,
             createdAt: user.createdAt
         };
 
@@ -163,6 +169,7 @@ const addAdmin = async (req, res) => {
 
         // Promote to admin
         existingUser.role = 'admin';
+        existingUser.wasAdmin = false;
         await existingUser.save();
 
         // Send admin promotion email
@@ -181,6 +188,7 @@ const addAdmin = async (req, res) => {
             role: existingUser.role,
             isVerified: existingUser.isVerified,
             isBlocked: existingUser.isBlocked,
+            wasAdmin: existingUser.wasAdmin,
             createdAt: existingUser.createdAt
         };
 
@@ -245,7 +253,7 @@ const searchUser = async (req, res) => {
     }
 };
 
-// ✅ UPDATED: Verify User - Send Verification Email (super_admin only)
+// Verify User - Send Verification Email (super_admin only)
 const verifyUser = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -364,7 +372,8 @@ const updateAdmin = async (req, res) => {
             phone: admin.phone,
             role: admin.role,
             isVerified: admin.isVerified,
-            isBlocked: admin.isBlocked
+            isBlocked: admin.isBlocked,
+            wasAdmin: admin.wasAdmin
         };
 
         res.status(200).json({
@@ -421,6 +430,7 @@ const removeAdmin = async (req, res) => {
 
         admin.role = 'user';
         admin.isBlocked = false;
+        admin.wasAdmin = false;
         await admin.save();
 
         const userResponse = {
@@ -430,7 +440,8 @@ const removeAdmin = async (req, res) => {
             phone: admin.phone,
             role: admin.role,
             isVerified: admin.isVerified,
-            isBlocked: admin.isBlocked
+            isBlocked: admin.isBlocked,
+            wasAdmin: admin.wasAdmin
         };
 
         res.status(200).json({
@@ -482,6 +493,8 @@ const blockAdmin = async (req, res) => {
             });
         }
 
+        // Mark that this user was an admin and block them
+        admin.wasAdmin = true;
         admin.role = 'user';
         admin.isBlocked = true;
         await admin.save();
@@ -490,8 +503,10 @@ const blockAdmin = async (req, res) => {
             _id: admin._id,
             name: admin.name,
             email: admin.email,
+            phone: admin.phone,
             role: admin.role,
-            isBlocked: admin.isBlocked
+            isBlocked: admin.isBlocked,
+            wasAdmin: admin.wasAdmin
         };
 
         res.status(200).json({
@@ -532,7 +547,8 @@ const unblockAdmin = async (req, res) => {
 
         user.isBlocked = false;
 
-        if (restoreAsAdmin && user.role === 'user') {
+        // If user was previously an admin and we want to restore as admin
+        if (restoreAsAdmin && user.wasAdmin === true) {
             if (!user.isVerified) {
                 return res.status(400).json({
                     success: false,
@@ -540,6 +556,9 @@ const unblockAdmin = async (req, res) => {
                 });
             }
             user.role = 'admin';
+            user.wasAdmin = false;
+        } else {
+            user.wasAdmin = false;
         }
 
         await user.save();
@@ -548,9 +567,11 @@ const unblockAdmin = async (req, res) => {
             _id: user._id,
             name: user.name,
             email: user.email,
+            phone: user.phone,
             role: user.role,
             isBlocked: user.isBlocked,
-            isVerified: user.isVerified
+            isVerified: user.isVerified,
+            wasAdmin: user.wasAdmin
         };
 
         res.status(200).json({
