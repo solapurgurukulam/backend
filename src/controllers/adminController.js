@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendAdminPromotionEmail, sendVerificationEmail } = require('../utils/sendEmail');
 
-// Get all admins - INCLUDES BLOCKED ADMINS
+// Get all admins - INCLUDES BLOCKED ADMINS (FIXED: Shows all admins including blocked)
 const getAllAdmins = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -17,13 +17,30 @@ const getAllAdmins = async (req, res) => {
         const admins = await User.find({
             $or: [
                 { role: { $in: ['admin', 'super_admin'] } },
-                { isBlocked: true, wasAdmin: true } // ✅ Include blocked admins
+                { isBlocked: true, wasAdmin: true }
             ]
         }).select('-password').sort({ createdAt: -1 });
 
+        // ✅ Format response to clearly show admin cards including blocked ones
+        const formattedAdmins = admins.map(admin => ({
+            _id: admin._id,
+            name: admin.name,
+            email: admin.email,
+            phone: admin.phone,
+            role: admin.role,
+            isVerified: admin.isVerified,
+            isBlocked: admin.isBlocked,
+            wasAdmin: admin.wasAdmin,
+            createdAt: admin.createdAt,
+            // ✅ For frontend display
+            displayStatus: admin.isBlocked ? 'blocked' : 'active',
+            isAdminCard: true // All returned users are admins or were admins
+        }));
+
         res.status(200).json({
             success: true,
-            data: admins
+            data: formattedAdmins,
+            count: formattedAdmins.length
         });
     } catch (error) {
         console.error('Get all admins error:', error);
@@ -77,11 +94,17 @@ const createAdmin = async (req, res) => {
             wasAdmin: false
         });
 
+        // ✅ Send promotion email with proper error handling
         try {
-            await sendAdminPromotionEmail(user.email, user.name);
-            console.log('✅ Admin promotion email sent to:', user.email);
+            const emailSent = await sendAdminPromotionEmail(user.email, user.name);
+            if (emailSent) {
+                console.log('✅ Admin promotion email sent to:', user.email);
+            } else {
+                console.warn('⚠️ Admin promotion email failed to send to:', user.email);
+            }
         } catch (emailError) {
-            console.warn('⚠️ Admin promotion email failed:', emailError.message);
+            console.warn('⚠️ Admin promotion email error:', emailError.message);
+            // Don't block user creation if email fails
         }
 
         const userResponse = {
@@ -93,7 +116,8 @@ const createAdmin = async (req, res) => {
             isVerified: user.isVerified,
             isBlocked: user.isBlocked,
             wasAdmin: user.wasAdmin,
-            createdAt: user.createdAt
+            createdAt: user.createdAt,
+            displayStatus: 'active'
         };
 
         res.status(201).json({
@@ -111,7 +135,7 @@ const createAdmin = async (req, res) => {
     }
 };
 
-// Add existing user as admin
+// Add existing user as admin - FIXED: Removed [object Object] placeholder
 const addAdmin = async (req, res) => {
     try {
         console.log('Add admin request body:', req.body);
@@ -125,10 +149,11 @@ const addAdmin = async (req, res) => {
 
         const { email, phone } = req.body;
 
+        // ✅ Clear validation with proper messages
         if (!email && !phone) {
             return res.status(400).json({
                 success: false,
-                message: 'Email or phone is required to find the user'
+                message: 'Please provide either email or phone to find the user'
             });
         }
 
@@ -141,10 +166,11 @@ const addAdmin = async (req, res) => {
         if (!existingUser) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found with provided email or phone. User must register first.'
+                message: `User not found with provided ${email ? 'email' : 'phone'}. User must register first.`
             });
         }
 
+        // ✅ Check if already admin
         if (existingUser.role === 'admin' || existingUser.role === 'super_admin') {
             return res.status(400).json({
                 success: false,
@@ -152,13 +178,15 @@ const addAdmin = async (req, res) => {
             });
         }
 
+        // ✅ Check if verified
         if (!existingUser.isVerified) {
             return res.status(400).json({
                 success: false,
-                message: 'User must verify their email and phone number before becoming an admin'
+                message: 'User must verify their email before becoming an admin'
             });
         }
 
+        // ✅ Check if blocked
         if (existingUser.isBlocked) {
             return res.status(400).json({
                 success: false,
@@ -166,15 +194,38 @@ const addAdmin = async (req, res) => {
             });
         }
 
+        // ✅ CHANGE ROLE FROM USER TO ADMIN
         existingUser.role = 'admin';
         existingUser.wasAdmin = false;
         await existingUser.save();
 
+        // ✅ Send promotion email with proper handling
         try {
-            await sendAdminPromotionEmail(existingUser.email, existingUser.name);
-            console.log('✅ Admin promotion email sent to:', existingUser.email);
+            const emailSent = await sendAdminPromotionEmail(existingUser.email, existingUser.name);
+            if (emailSent) {
+                console.log('✅ Admin promotion email sent to:', existingUser.email);
+            } else {
+                console.warn('⚠️ Admin promotion email failed to send to:', existingUser.email);
+            }
         } catch (emailError) {
-            console.warn('⚠️ Admin promotion email failed:', emailError.message);
+            console.error('❌ Admin promotion email error:', emailError.message);
+            // Still return success but with warning
+            return res.status(200).json({
+                success: true,
+                message: 'User promoted to Admin but email notification failed. Please check email configuration.',
+                data: {
+                    _id: existingUser._id,
+                    name: existingUser.name,
+                    email: existingUser.email,
+                    phone: existingUser.phone,
+                    role: existingUser.role,
+                    isVerified: existingUser.isVerified,
+                    isBlocked: existingUser.isBlocked,
+                    wasAdmin: existingUser.wasAdmin,
+                    createdAt: existingUser.createdAt,
+                    displayStatus: 'active'
+                }
+            });
         }
 
         const userResponse = {
@@ -186,7 +237,8 @@ const addAdmin = async (req, res) => {
             isVerified: existingUser.isVerified,
             isBlocked: existingUser.isBlocked,
             wasAdmin: existingUser.wasAdmin,
-            createdAt: existingUser.createdAt
+            createdAt: existingUser.createdAt,
+            displayStatus: 'active'
         };
 
         res.status(200).json({
@@ -204,7 +256,7 @@ const addAdmin = async (req, res) => {
     }
 };
 
-// Search User by Email or Phone
+// Search User by Email or Phone - FIXED: No [object Object]
 const searchUser = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -214,7 +266,8 @@ const searchUser = async (req, res) => {
             });
         }
 
-        const { email, phone } = req.body;
+        // ✅ Changed from req.body to req.query for GET requests
+        const { email, phone } = req.query;
 
         if (!email && !phone) {
             return res.status(400).json({
@@ -236,9 +289,21 @@ const searchUser = async (req, res) => {
             });
         }
 
+        // ✅ Return proper user object (no [object Object])
         res.status(200).json({
             success: true,
-            data: user
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                isVerified: user.isVerified,
+                isBlocked: user.isBlocked,
+                wasAdmin: user.wasAdmin,
+                createdAt: user.createdAt,
+                displayStatus: user.isBlocked ? 'blocked' : 'active'
+            }
         });
 
     } catch (error) {
@@ -250,7 +315,7 @@ const searchUser = async (req, res) => {
     }
 };
 
-// Verify User - Send Verification Email
+// Verify User - Send Verification Email - FIXED: Email sending issue
 const verifyUser = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -291,16 +356,30 @@ const verifyUser = async (req, res) => {
         user.emailVerificationExpires = emailVerificationExpires;
         await user.save();
 
+        // ✅ Send verification email with proper error handling
         try {
-            await sendVerificationEmail(user.email, emailVerificationToken, user.name);
+            const emailSent = await sendVerificationEmail(user.email, emailVerificationToken, user.name);
             
-            res.status(200).json({
-                success: true,
-                message: 'Verification email sent successfully'
-            });
+            if (emailSent) {
+                res.status(200).json({
+                    success: true,
+                    message: `Verification email sent successfully to ${user.email}`
+                });
+            } else {
+                // Clear tokens if email fails
+                user.emailVerificationToken = undefined;
+                user.emailVerificationExpires = undefined;
+                await user.save();
+                
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to send verification email. Please check email configuration.'
+                });
+            }
         } catch (emailError) {
             console.error('❌ Failed to send verification email:', emailError.message);
             
+            // Clear the token if email fails
             user.emailVerificationToken = undefined;
             user.emailVerificationExpires = undefined;
             await user.save();
@@ -366,7 +445,8 @@ const updateAdmin = async (req, res) => {
             role: admin.role,
             isVerified: admin.isVerified,
             isBlocked: admin.isBlocked,
-            wasAdmin: admin.wasAdmin
+            wasAdmin: admin.wasAdmin,
+            displayStatus: admin.isBlocked ? 'blocked' : 'active'
         };
 
         res.status(200).json({
@@ -384,7 +464,7 @@ const updateAdmin = async (req, res) => {
     }
 };
 
-// Remove admin (demote to regular user)
+// Remove admin (demote to regular user) - FIXED: Changes admin to user
 const removeAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -421,6 +501,7 @@ const removeAdmin = async (req, res) => {
             }
         }
 
+        // ✅ CHANGE ROLE FROM ADMIN TO USER
         admin.role = 'user';
         admin.isBlocked = false;
         admin.wasAdmin = false;
@@ -434,7 +515,8 @@ const removeAdmin = async (req, res) => {
             role: admin.role,
             isVerified: admin.isVerified,
             isBlocked: admin.isBlocked,
-            wasAdmin: admin.wasAdmin
+            wasAdmin: admin.wasAdmin,
+            displayStatus: 'active'
         };
 
         res.status(200).json({
@@ -500,7 +582,8 @@ const blockAdmin = async (req, res) => {
             role: admin.role,
             isBlocked: admin.isBlocked,
             wasAdmin: admin.wasAdmin,
-            isVerified: admin.isVerified
+            isVerified: admin.isVerified,
+            displayStatus: 'blocked'
         };
 
         res.status(200).json({
@@ -549,6 +632,7 @@ const unblockAdmin = async (req, res) => {
                     message: 'Cannot restore as admin. User must be verified.'
                 });
             }
+            // ✅ CHANGE ROLE FROM USER TO ADMIN
             user.role = 'admin';
             user.wasAdmin = false;
         } else {
@@ -565,7 +649,8 @@ const unblockAdmin = async (req, res) => {
             role: user.role,
             isBlocked: user.isBlocked,
             isVerified: user.isVerified,
-            wasAdmin: user.wasAdmin
+            wasAdmin: user.wasAdmin,
+            displayStatus: user.isBlocked ? 'blocked' : 'active'
         };
 
         res.status(200).json({
@@ -583,7 +668,7 @@ const unblockAdmin = async (req, res) => {
     }
 };
 
-// Delete user
+// Delete user - FIXED: Deletes user completely
 const deleteAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -613,11 +698,16 @@ const deleteAdmin = async (req, res) => {
             }
         }
 
+        // ✅ DELETE USER COMPLETELY
         await User.findByIdAndDelete(adminId);
 
         res.status(200).json({
             success: true,
-            message: 'User deleted successfully'
+            message: 'User deleted successfully',
+            data: {
+                deletedUserId: adminId,
+                deletedUserEmail: admin.email
+            }
         });
 
     } catch (error) {
