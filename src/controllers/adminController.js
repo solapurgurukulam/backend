@@ -41,19 +41,27 @@ const createAdmin = async (req, res) => {
 
         const { email, phone, role } = req.body;
 
+        // Validate input - at least email or phone is required
+        if (!email && !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide either email or phone number'
+            });
+        }
+
         // Check if user exists with either email or phone
         let user = await User.findOne({
             $or: [
-                { email: email.toLowerCase().trim() },
-                { phone: phone.trim() }
+                ...(email ? [{ email: email.toLowerCase().trim() }] : []),
+                ...(phone ? [{ phone: phone.trim() }] : [])
             ]
         });
 
-        // If user doesn't exist, return error
+        // If user doesn't exist, return error - do NOT create new user
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found with this email or phone number. Please register first.'
+                message: 'User not found with this email or phone number. User must be registered first.'
             });
         }
 
@@ -65,7 +73,7 @@ const createAdmin = async (req, res) => {
             });
         }
 
-        // Update user to admin role
+        // Update user to admin role (no verification required)
         user.role = role === 'super_admin' ? 'super_admin' : 'admin';
         user.isBlocked = false; // Ensure not blocked
         await user.save();
@@ -204,67 +212,9 @@ const deleteAdmin = async (req, res) => {
     }
 };
 
-// Unblock admin
-const unblockAdmin = async (req, res) => {
-    try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
-        const adminId = req.params.id;
-        const { restoreAsAdmin } = req.body;
-
-        const admin = await User.findById(adminId);
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: 'Admin not found'
-            });
-        }
-
-        admin.isBlocked = false;
-
-        // restoreAsAdmin === false  -> explicitly demote to a regular user
-        // restoreAsAdmin === true   -> keep/restore admin role
-        // restoreAsAdmin undefined -> backward-compatible, leave role untouched
-        if (restoreAsAdmin === false) {
-            admin.role = 'user';
-        } else if (restoreAsAdmin === true && admin.role !== 'super_admin') {
-            admin.role = 'admin';
-        }
-
-        await admin.save();
-
-        const adminResponse = {
-            _id: admin._id,
-            name: admin.name,
-            email: admin.email,
-            role: admin.role,
-            isBlocked: admin.isBlocked
-        };
-
-        res.status(200).json({
-            success: true,
-            message: 'Admin unblocked successfully',
-            data: adminResponse
-        });
-
-    } catch (error) {
-        console.error('Unblock admin error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
 module.exports = {
     getAllAdmins,
     createAdmin,
     updateAdmin,
-    deleteAdmin,
-    unblockAdmin
+    deleteAdmin
 };
