@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const bcrypt = require('bcryptjs'); // <-- ADDED: Required for hashing the new admin's password
 
 // Get all admins (super_admin only)
 const getAllAdmins = async (req, res) => {
@@ -169,7 +168,7 @@ const createAdmin = async (req, res) => {
     }
 };
 
-// <-- ADDED THIS WHOLE FUNCTION: Register a brand-new admin from scratch -->
+// Register a brand-new admin from scratch (FIXED: No double-hashing)
 const registerNewAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -190,16 +189,12 @@ const registerNewAdmin = async (req, res) => {
             });
         }
 
-        // 2. Hash the password before saving to database
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // 3. Create the new user with the admin/super_admin role
+        // 2. Create the new user with plain text password (Mongoose pre-save will hash it)
         const newAdmin = await User.create({
             name,
             email: email.toLowerCase().trim(),
             phone: phone || '',
-            password: hashedPassword,
+            password: password, // <-- FIXED: Passing plain password here
             role: role || 'admin'
         });
 
@@ -338,7 +333,7 @@ module.exports = {
     getAllAdmins,
     searchUser,
     createAdmin,
-    registerNewAdmin, // <-- ADDED: Export the new function so the router can use it
+    registerNewAdmin,
     updateAdmin,
     deleteAdmin
 };
