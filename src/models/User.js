@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'admin', 'super_admin'],
         default: 'user',
     },
-    // ✅ Track if user was previously an admin (for blocked admins)
+    // ✅ NEW: Track if user was previously an admin
     wasAdmin: {
         type: Boolean,
         default: false,

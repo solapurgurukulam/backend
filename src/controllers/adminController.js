@@ -452,7 +452,7 @@ const removeAdmin = async (req, res) => {
     }
 };
 
-// Block admin (demote + block) - SUPER ADMIN ONLY
+// Block admin (demote + block)
 const blockAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
