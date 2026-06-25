@@ -1,0 +1,9 @@
+.env
+node_modules/
+testEmail.js
+*.log
+.DS_Store
+dist/
+build/
+coverage/
+.nyc_output/

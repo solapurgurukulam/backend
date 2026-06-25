@@ -245,7 +245,7 @@ const searchUser = async (req, res) => {
     }
 };
 
-// Verify User - Send Verification Email (super_admin only)
+// ✅ UPDATED: Verify User - Send Verification Email (super_admin only)
 const verifyUser = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -272,6 +272,14 @@ const verifyUser = async (req, res) => {
             });
         }
 
+        // Check if user has email
+        if (!user.email) {
+            return res.status(400).json({
+                success: false,
+                message: 'User does not have an email address'
+            });
+        }
+
         // Generate new verification token
         const emailVerificationToken = crypto.randomBytes(32).toString("hex");
         const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -280,13 +288,28 @@ const verifyUser = async (req, res) => {
         user.emailVerificationExpires = emailVerificationExpires;
         await user.save();
 
-        // Send verification email
-        await sendVerificationEmail(user.email, emailVerificationToken, user.name);
-
-        res.status(200).json({
-            success: true,
-            message: 'Verification email sent successfully'
-        });
+        // Send verification email with proper error handling
+        try {
+            await sendVerificationEmail(user.email, emailVerificationToken, user.name);
+            
+            res.status(200).json({
+                success: true,
+                message: 'Verification email sent successfully'
+            });
+        } catch (emailError) {
+            console.error('❌ Failed to send verification email:', emailError.message);
+            
+            // Revert the token if email fails
+            user.emailVerificationToken = undefined;
+            user.emailVerificationExpires = undefined;
+            await user.save();
+            
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send verification email. Please check email configuration.',
+                error: process.env.NODE_ENV === 'development' ? emailError.message : undefined
+            });
+        }
 
     } catch (error) {
         console.error('Verify user error:', error);
