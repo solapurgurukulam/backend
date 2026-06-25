@@ -3,15 +3,10 @@ const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
 const {
     getAllAdmins,
-    createAdmin,
     searchUser,
-    addExistingUserAsAdmin,
-    verifyUser,
+    createAdmin,
     updateAdmin,
     deleteAdmin,
-    blockAdmin,
-    unblockAdmin,
-    removeAdmin,
 } = require('../controllers/adminController');
 
 // All routes require authentication and super_admin role
@@ -22,18 +17,11 @@ router.use(authorize('super_admin'));
 router.get('/all', getAllAdmins);
 router.post('/create', createAdmin);
 
-// Existing user management
-router.get('/search-user', searchUser);           // GET /api/admin/search-user?email=...
-router.post('/add', addExistingUserAsAdmin);       // POST /api/admin/add — promote user to admin
-router.post('/verify-user/:id', verifyUser);      // POST /api/admin/verify-user/:id — send verify email
+// Existing user management - Search user by email or phone
+router.get('/search-user', searchUser); // GET /api/admin/search-user?email=xxx&phone=xxx
 
-// Admin CRUD
+// Admin CRUD operations
 router.put('/:id', updateAdmin);
 router.delete('/:id', deleteAdmin);
-
-// Block / Unblock / Remove
-router.post('/:id/block', blockAdmin);
-router.post('/:id/unblock', unblockAdmin);
-router.post('/:id/remove', removeAdmin);           // POST /api/admin/:id/remove — demote to user
 
 module.exports = router;

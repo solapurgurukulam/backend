@@ -27,7 +27,59 @@ const getAllAdmins = async (req, res) => {
     }
 };
 
-// Create new admin (super_admin only)
+// Search user by email or phone
+const searchUser = async (req, res) => {
+    try {
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Super admin only.'
+            });
+        }
+
+        const { email, phone } = req.query;
+
+        if (!email && !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide either email or phone number'
+            });
+        }
+
+        const searchConditions = [];
+        if (email) {
+            searchConditions.push({ email: email.toLowerCase().trim() });
+        }
+        if (phone) {
+            searchConditions.push({ phone: phone.trim() });
+        }
+
+        const user = await User.findOne({
+            $or: searchConditions
+        }).select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found with this email or phone number'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+
+    } catch (error) {
+        console.error('Search user error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Create/Promote admin - Changes role from user to admin
 const createAdmin = async (req, res) => {
     try {
         console.log('Create admin request body:', req.body);
@@ -49,15 +101,20 @@ const createAdmin = async (req, res) => {
             });
         }
 
-        // Check if user exists with either email or phone
+        const searchConditions = [];
+        if (email) {
+            searchConditions.push({ email: email.toLowerCase().trim() });
+        }
+        if (phone) {
+            searchConditions.push({ phone: phone.trim() });
+        }
+
+        // Check if user exists
         let user = await User.findOne({
-            $or: [
-                ...(email ? [{ email: email.toLowerCase().trim() }] : []),
-                ...(phone ? [{ phone: phone.trim() }] : [])
-            ]
+            $or: searchConditions
         });
 
-        // If user doesn't exist, return error - do NOT create new user
+        // If user doesn't exist, return error
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -69,11 +126,19 @@ const createAdmin = async (req, res) => {
         if (user.role === 'admin' || user.role === 'super_admin') {
             return res.status(400).json({
                 success: false,
-                message: 'User is already an admin'
+                message: `User is already an ${user.role}`
             });
         }
 
-        // Update user to admin role (no verification required)
+        // Check if user is blocked
+        if (user.isBlocked) {
+            return res.status(400).json({
+                success: false,
+                message: 'Blocked users cannot be assigned as admin'
+            });
+        }
+
+        // PROMOTE USER TO ADMIN - Change role from 'user' to 'admin' or 'super_admin'
         user.role = role === 'super_admin' ? 'super_admin' : 'admin';
         user.isBlocked = false; // Ensure not blocked
         await user.save();
@@ -124,6 +189,7 @@ const updateAdmin = async (req, res) => {
             });
         }
 
+        // Prevent changing the only Super Admin's role
         if (admin.role === 'super_admin' && role !== 'super_admin') {
             const superAdminCount = await User.countDocuments({ role: 'super_admin' });
             if (superAdminCount === 1) {
@@ -164,7 +230,7 @@ const updateAdmin = async (req, res) => {
     }
 };
 
-// Delete admin (demote to user)
+// Delete/Demote admin - Changes role from admin to user
 const deleteAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -184,6 +250,7 @@ const deleteAdmin = async (req, res) => {
             });
         }
 
+        // Prevent demoting the only Super Admin
         if (admin.role === 'super_admin') {
             const superAdminCount = await User.countDocuments({ role: 'super_admin' });
             if (superAdminCount === 1) {
@@ -194,7 +261,7 @@ const deleteAdmin = async (req, res) => {
             }
         }
 
-        // Demote to regular user instead of deleting
+        // DEMOTE ADMIN TO USER - Change role from 'admin' or 'super_admin' to 'user'
         admin.role = 'user';
         await admin.save();
 
@@ -214,6 +281,7 @@ const deleteAdmin = async (req, res) => {
 
 module.exports = {
     getAllAdmins,
+    searchUser,
     createAdmin,
     updateAdmin,
     deleteAdmin
