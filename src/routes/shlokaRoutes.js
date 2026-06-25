@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
+const { uploadSingle } = require('../middleware/uploadMiddleware'); // 1. IMPORT THIS
 const {
     getAllShlokas,
     getShlokasByCategory,
@@ -21,8 +22,9 @@ router.get('/:id', getShlokaById);
 router.post('/:id/views', incrementShlokaViews);
 
 router.use(protect);
-router.post('/', authorize('admin', 'super_admin'), createShloka);
-router.put('/:id', authorize('admin', 'super_admin'), updateShloka);
+// 2. ADD uploadSingle('image') HERE
+router.post('/', authorize('admin', 'super_admin'), uploadSingle('image'), createShloka);
+router.put('/:id', authorize('admin', 'super_admin'), uploadSingle('image'), updateShloka);
 router.delete('/:id', authorize('admin', 'super_admin'), deleteShloka);
 
 module.exports = router;
