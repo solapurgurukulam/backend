@@ -19,7 +19,7 @@ const getAllAdmins = async (req, res) => {
                 { role: { $in: ['admin', 'super_admin'] } },
                 { isBlocked: true, wasAdmin: true } // ✅ Include blocked admins
             ]
-        }).select('-password');
+        }).select('-password').sort({ createdAt: -1 });
 
         res.status(200).json({
             success: true,
