@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-const { sendAdminPromotionEmail } = require('../utils/sendEmail');
+const crypto = require('crypto');
+const { sendAdminPromotionEmail, sendVerificationEmail } = require('../utils/sendEmail');
 
 // Get all admins (super_admin only)
 const getAllAdmins = async (req, res) => {
@@ -29,7 +30,7 @@ const getAllAdmins = async (req, res) => {
     }
 };
 
-// ✅ MODIFIED: Create new admin with email
+// Create new admin (super_admin only)
 const createAdmin = async (req, res) => {
     try {
         console.log('Create admin request body:', req.body);
@@ -71,7 +72,7 @@ const createAdmin = async (req, res) => {
             isBlocked: false
         });
 
-        // ✅ Send admin promotion email
+        // Send admin promotion email
         try {
             await sendAdminPromotionEmail(user.email, user.name);
             console.log('✅ Admin promotion email sent to:', user.email);
@@ -105,7 +106,7 @@ const createAdmin = async (req, res) => {
     }
 };
 
-// ✅ NEW: Add existing user as admin with email
+// Add existing user as admin (super_admin only)
 const addAdmin = async (req, res) => {
     try {
         console.log('Add admin request body:', req.body);
@@ -164,7 +165,7 @@ const addAdmin = async (req, res) => {
         existingUser.role = 'admin';
         await existingUser.save();
 
-        // ✅ Send admin promotion email
+        // Send admin promotion email
         try {
             await sendAdminPromotionEmail(existingUser.email, existingUser.name);
             console.log('✅ Admin promotion email sent to:', existingUser.email);
@@ -198,7 +199,167 @@ const addAdmin = async (req, res) => {
     }
 };
 
-// ✅ NEW: Remove admin (demote to regular user)
+// Search User by Email or Phone (super_admin only)
+const searchUser = async (req, res) => {
+    try {
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Super admin only.'
+            });
+        }
+
+        const { email, phone } = req.body;
+
+        if (!email && !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email or phone is required'
+            });
+        }
+
+        const searchCriteria = {};
+        if (email) searchCriteria.email = email.toLowerCase().trim();
+        if (phone) searchCriteria.phone = phone.trim();
+
+        const user = await User.findOne(searchCriteria).select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+
+    } catch (error) {
+        console.error('Search user error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Verify User - Send Verification Email (super_admin only)
+const verifyUser = async (req, res) => {
+    try {
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Super admin only.'
+            });
+        }
+
+        const userId = req.params.id;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({
+                success: false,
+                message: 'User is already verified'
+            });
+        }
+
+        // Generate new verification token
+        const emailVerificationToken = crypto.randomBytes(32).toString("hex");
+        const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        user.emailVerificationToken = emailVerificationToken;
+        user.emailVerificationExpires = emailVerificationExpires;
+        await user.save();
+
+        // Send verification email
+        await sendVerificationEmail(user.email, emailVerificationToken, user.name);
+
+        res.status(200).json({
+            success: true,
+            message: 'Verification email sent successfully'
+        });
+
+    } catch (error) {
+        console.error('Verify user error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Update admin (super_admin only)
+const updateAdmin = async (req, res) => {
+    try {
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Super admin only.'
+            });
+        }
+
+        const { name, phone, role } = req.body;
+        const adminId = req.params.id;
+
+        const admin = await User.findById(adminId);
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin not found'
+            });
+        }
+
+        if (admin.role === 'super_admin' && role && role !== 'super_admin') {
+            const superAdminCount = await User.countDocuments({ role: 'super_admin' });
+            if (superAdminCount === 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot change the only Super Admin\'s role'
+                });
+            }
+        }
+
+        if (name) admin.name = name.trim();
+        if (phone) admin.phone = phone.trim();
+        if (role && role !== admin.role) admin.role = role;
+
+        await admin.save();
+
+        const adminResponse = {
+            _id: admin._id,
+            name: admin.name,
+            email: admin.email,
+            phone: admin.phone,
+            role: admin.role,
+            isVerified: admin.isVerified,
+            isBlocked: admin.isBlocked
+        };
+
+        res.status(200).json({
+            success: true,
+            message: 'Admin updated successfully',
+            data: adminResponse
+        });
+
+    } catch (error) {
+        console.error('Update admin error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+// Remove admin (demote to regular user) - super_admin only
 const removeAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -264,115 +425,7 @@ const removeAdmin = async (req, res) => {
     }
 };
 
-// Update admin
-const updateAdmin = async (req, res) => {
-    try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
-        const { name, phone, role } = req.body;
-        const adminId = req.params.id;
-
-        const admin = await User.findById(adminId);
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: 'Admin not found'
-            });
-        }
-
-        if (admin.role === 'super_admin' && role && role !== 'super_admin') {
-            const superAdminCount = await User.countDocuments({ role: 'super_admin' });
-            if (superAdminCount === 1) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Cannot change the only Super Admin\'s role'
-                });
-            }
-        }
-
-        if (name) admin.name = name.trim();
-        if (phone) admin.phone = phone.trim();
-        if (role && role !== admin.role) admin.role = role;
-
-        await admin.save();
-
-        const adminResponse = {
-            _id: admin._id,
-            name: admin.name,
-            email: admin.email,
-            phone: admin.phone,
-            role: admin.role,
-            isVerified: admin.isVerified,
-            isBlocked: admin.isBlocked
-        };
-
-        res.status(200).json({
-            success: true,
-            message: 'Admin updated successfully',
-            data: adminResponse
-        });
-
-    } catch (error) {
-        console.error('Update admin error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// Delete admin
-const deleteAdmin = async (req, res) => {
-    try {
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Super admin only.'
-            });
-        }
-
-        const adminId = req.params.id;
-
-        const admin = await User.findById(adminId);
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: 'Admin not found'
-            });
-        }
-
-        if (admin.role === 'super_admin') {
-            const superAdminCount = await User.countDocuments({ role: 'super_admin' });
-            if (superAdminCount === 1) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Cannot delete the only Super Admin'
-                });
-            }
-        }
-
-        await User.findByIdAndDelete(adminId);
-
-        res.status(200).json({
-            success: true,
-            message: 'Admin deleted successfully'
-        });
-
-    } catch (error) {
-        console.error('Delete admin error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-// Block admin - MODIFIED to demote + block
+// Block admin (demote + block) - super_admin only
 const blockAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -392,6 +445,13 @@ const blockAdmin = async (req, res) => {
             });
         }
 
+        if (admin.role !== 'admin' && admin.role !== 'super_admin') {
+            return res.status(400).json({
+                success: false,
+                message: 'User is not an admin'
+            });
+        }
+
         if (admin.role === 'super_admin') {
             return res.status(400).json({
                 success: false,
@@ -399,12 +459,11 @@ const blockAdmin = async (req, res) => {
             });
         }
 
-        // Demote to user and block
         admin.role = 'user';
         admin.isBlocked = true;
         await admin.save();
 
-        const adminResponse = {
+        const userResponse = {
             _id: admin._id,
             name: admin.name,
             email: admin.email,
@@ -415,7 +474,7 @@ const blockAdmin = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'Admin blocked and demoted to regular user',
-            data: adminResponse
+            data: userResponse
         });
 
     } catch (error) {
@@ -427,7 +486,7 @@ const blockAdmin = async (req, res) => {
     }
 };
 
-// Unblock admin - MODIFIED to optionally restore
+// Unblock user (optionally restore as admin) - super_admin only
 const unblockAdmin = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -486,13 +545,61 @@ const unblockAdmin = async (req, res) => {
     }
 };
 
+// Delete user (super_admin only)
+const deleteAdmin = async (req, res) => {
+    try {
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Super admin only.'
+            });
+        }
+
+        const adminId = req.params.id;
+
+        const admin = await User.findById(adminId);
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (admin.role === 'super_admin') {
+            const superAdminCount = await User.countDocuments({ role: 'super_admin' });
+            if (superAdminCount === 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot delete the only Super Admin'
+                });
+            }
+        }
+
+        await User.findByIdAndDelete(adminId);
+
+        res.status(200).json({
+            success: true,
+            message: 'User deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete admin error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllAdmins,
     createAdmin,
     addAdmin,
+    searchUser,
+    verifyUser,
     updateAdmin,
-    deleteAdmin,
     removeAdmin,
     blockAdmin,
-    unblockAdmin
+    unblockAdmin,
+    deleteAdmin
 };
