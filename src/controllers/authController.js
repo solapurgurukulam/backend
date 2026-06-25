@@ -5,8 +5,9 @@ const User = require("../models/User");
 const Token = require("../models/Token");
 const {
   sendVerificationEmail,
+  sendWelcomeEmail,        // ✅ ADDED
   sendPasswordResetEmail,
-} = require("../utils/sendEmail")
+} = require("../utils/sendEmail");
 const { uploadToCloudinary } = require("../config/cloudinary");
 
 const generateTokens = async (userId) => {
@@ -32,7 +33,7 @@ const generateTokens = async (userId) => {
   return { accessToken, refreshToken };
 };
 
-// ✅ Register
+// ✅ Register - MODIFIED with Welcome Email
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -61,10 +62,15 @@ exports.register = async (req, res) => {
 
     console.log("✅ User created:", user._id);
 
-    // Send verification email (optional - won't break if fails)
-sendVerificationEmail(email, emailVerificationToken, name)
+    // Send verification email
+    sendVerificationEmail(email, emailVerificationToken, name)
       .then(() => console.log("✅ Verification email sent"))
-      .catch((emailError) => console.warn("⚠️ Email sending failed:", emailError.message));
+      .catch((emailError) => console.warn("⚠️ Verification email failed:", emailError.message));
+
+    // ✅ NEW: Send welcome email
+    sendWelcomeEmail(email, name)
+      .then(() => console.log("✅ Welcome email sent"))
+      .catch((emailError) => console.warn("⚠️ Welcome email failed:", emailError.message));
 
     const { accessToken, refreshToken } = await generateTokens(user._id);
 

@@ -8,7 +8,7 @@ const createTransporter = () => {
             service: 'gmail',
             auth: {
                 user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD // Use App Password, not regular password
+                pass: process.env.EMAIL_PASS // Use App Password, not regular password
             }
         });
     }
@@ -20,9 +20,8 @@ const createTransporter = () => {
         secure: process.env.EMAIL_SECURE === 'true' || false,
         auth: {
             user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS,
+            pass: process.env.EMAIL_PASS,
         },
-        // Add timeout and debug options
         connectionTimeout: 5000,
         greetingTimeout: 5000,
         socketTimeout: 5000,
@@ -43,14 +42,12 @@ const sendEmail = async (options) => {
             to: options.email,
             subject: options.subject,
             html: options.html,
-            // Add text version as fallback
             text: options.text || options.html.replace(/<[^>]*>/g, ''),
         };
 
         const info = await transporter.sendMail(mailOptions);
         console.log(`✅ Email sent successfully: ${info.messageId}`);
         
-        // For Ethereal email testing
         if (process.env.NODE_ENV === 'development' && process.env.EMAIL_SERVICE === 'ethereal') {
             console.log('📧 Preview URL:', nodemailer.getTestMessageUrl(info));
         }
@@ -131,7 +128,6 @@ const sendVerificationEmail = async (email, token, name) => {
         </html>
         `;
 
-        // Plain text version as fallback
         const text = `
         Welcome to Solapur Gurukulam!
 
@@ -155,6 +151,239 @@ const sendVerificationEmail = async (email, token, name) => {
         });
     } catch (error) {
         console.error('❌ Verification email error:', error);
+        throw error;
+    }
+};
+
+// ✅ NEW: Send Welcome Email
+const sendWelcomeEmail = async (email, name) => {
+    try {
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Welcome to Solapur Gurukulam</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f4; padding: 20px 0;">
+                <tr>
+                    <td align="center">
+                        <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 40px;">
+                            <tr>
+                                <td align="center" style="padding-bottom: 20px;">
+                                    <h1 style="color: #8B0000; margin: 0; font-size: 28px;">🕉️ Solapur Gurukulam</h1>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 20px 0;">
+                                    <h2 style="color: #333333; font-size: 24px; margin: 0 0 20px 0;">Welcome Aboard, ${name || 'Devotee'}! 🙏</h2>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                        We are honored to have you as a member of the <strong style="color: #8B0000;">Solapur Gurukulam</strong> family.
+                                    </p>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                        Your journey into the depths of Sanatana Dharma begins here. Explore the timeless wisdom of mantras, shlokas, and spiritual teachings.
+                                    </p>
+                                    <div style="text-align: center; margin: 20px 0;">
+                                        <span style="display: inline-block; padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 20px; margin: 5px; font-size: 14px;">📿 Mantras</span>
+                                        <span style="display: inline-block; padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 20px; margin: 5px; font-size: 14px;">📖 Shlokas</span>
+                                        <span style="display: inline-block; padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 20px; margin: 5px; font-size: 14px;">🕉️ Shotrams</span>
+                                        <span style="display: inline-block; padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 20px; margin: 5px; font-size: 14px;">⭐ Favorites</span>
+                                    </div>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 10px 0;">
+                                        <strong>Get Started:</strong>
+                                    </p>
+                                    <ul style="color: #555555; font-size: 16px; line-height: 1.8; margin: 0 0 20px 0; padding-left: 20px;">
+                                        <li>📿 Browse through our collection of powerful mantras</li>
+                                        <li>⭐ Save your favorites for quick access</li>
+                                        <li>📖 Read daily shlokas for spiritual growth</li>
+                                        <li>🙏 Connect with our community of devotees</li>
+                                    </ul>
+                                    <p style="text-align: center; font-style: italic; color: #92400e; margin: 20px 0; font-size: 18px;">
+                                        "The goal of life is to realize the divine within." 🙏
+                                    </p>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 10px 0;">
+                                        With warm regards,<br>
+                                        <strong style="color: #8B0000;">Solapur Gurukulam Team</strong>
+                                    </p>
+                                    <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 0 0 10px 0;">
+                                        🌺 May you find peace and wisdom on your spiritual journey.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
+                                    <p style="color: #999999; font-size: 12px; margin: 0;">
+                                        &copy; ${new Date().getFullYear()} Solapur Gurukulam. All rights reserved.
+                                    </p>
+                                    <p style="color: #999999; font-size: 12px; margin: 5px 0 0 0;">
+                                        Solapur, Maharashtra, India
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        `;
+
+        const text = `
+        Welcome to Solapur Gurukulam!
+
+        Welcome Aboard, ${name || 'Devotee'}! 🙏
+
+        We are honored to have you as a member of the Solapur Gurukulam family.
+
+        Your journey into the depths of Sanatana Dharma begins here. Explore the timeless wisdom of mantras, shlokas, and spiritual teachings.
+
+        Get Started:
+        - Browse through our collection of powerful mantras
+        - Save your favorites for quick access
+        - Read daily shlokas for spiritual growth
+        - Connect with our community of devotees
+
+        "The goal of life is to realize the divine within." 🙏
+
+        With warm regards,
+        Solapur Gurukulam Team
+
+        © ${new Date().getFullYear()} Solapur Gurukulam. All rights reserved.
+        `;
+
+        return await sendEmail({ 
+            email, 
+            subject: 'Welcome to Solapur Gurukulam! 🙏', 
+            html,
+            text
+        });
+    } catch (error) {
+        console.error('❌ Welcome email error:', error);
+        throw error;
+    }
+};
+
+// ✅ NEW: Send Admin Promotion Email
+const sendAdminPromotionEmail = async (email, name) => {
+    try {
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Admin Promotion - Solapur Gurukulam</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f4; padding: 20px 0;">
+                <tr>
+                    <td align="center">
+                        <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 40px;">
+                            <tr>
+                                <td align="center" style="padding-bottom: 20px;">
+                                    <h1 style="color: #8B0000; margin: 0; font-size: 28px;">🕉️ Solapur Gurukulam</h1>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 20px 0;">
+                                    <div style="text-align: center; margin-bottom: 20px;">
+                                        <span style="display: inline-block; background: linear-gradient(135deg, #8B0000, #5c0000); color: white; padding: 8px 20px; border-radius: 20px; font-weight: bold; font-size: 16px;">🎉 Admin Promotion</span>
+                                    </div>
+                                    <h2 style="color: #333333; font-size: 24px; margin: 0 0 20px 0;">Congratulations, ${name || 'Admin'}! 🎊</h2>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                        We are thrilled to announce that you have been promoted to <strong style="color: #8B0000;">Administrator</strong> at Solapur Gurukulam!
+                                    </p>
+                                    <div style="background: #f9f0f0; padding: 15px; border-radius: 8px; border-left: 4px solid #8B0000; margin: 20px 0;">
+                                        <p style="margin: 0 0 10px 0; color: #333; font-weight: bold;">✨ Your New Role:</p>
+                                        <ul style="margin: 0; padding-left: 20px; color: #555;">
+                                            <li style="margin: 5px 0;">👑 You now have administrative privileges</li>
+                                            <li style="margin: 5px 0;">📝 You can manage content (mantras, shlokas, shotrams)</li>
+                                            <li style="margin: 5px 0;">👥 You can help manage users and categories</li>
+                                            <li style="margin: 5px 0;">🌟 You play a vital role in our spiritual community</li>
+                                        </ul>
+                                    </div>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 10px 0;">
+                                        <strong>Your Responsibilities:</strong>
+                                    </p>
+                                    <ul style="color: #555555; font-size: 16px; line-height: 1.8; margin: 0 0 20px 0; padding-left: 20px;">
+                                        <li>📿 Maintain and update spiritual content</li>
+                                        <li>🙏 Guide and support community members</li>
+                                        <li>📖 Ensure the quality of teachings</li>
+                                        <li>🌺 Help spread the wisdom of Sanatana Dharma</li>
+                                    </ul>
+                                    <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                        <p style="margin: 0; color: #92400e; font-size: 15px; line-height: 1.6;">
+                                            <strong>🙏 A Message from the Team:</strong><br>
+                                            "We are grateful to have you as part of our administrative team. Your dedication to preserving and sharing spiritual wisdom is invaluable. May you continue to serve with devotion and integrity."
+                                        </p>
+                                    </div>
+                                    <p style="text-align: center; font-style: italic; color: #6b7280; margin: 20px 0; font-size: 17px;">
+                                        "Service to humanity is service to the divine." 🙏
+                                    </p>
+                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 10px 0;">
+                                        With gratitude and blessings,<br>
+                                        <strong style="color: #8B0000;">Solapur Gurukulam Team</strong>
+                                    </p>
+                                    <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 0 0 10px 0;">
+                                        🌺 Welcome to the Admin family!
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
+                                    <p style="color: #999999; font-size: 12px; margin: 0;">
+                                        &copy; ${new Date().getFullYear()} Solapur Gurukulam. All rights reserved.
+                                    </p>
+                                    <p style="color: #999999; font-size: 12px; margin: 5px 0 0 0;">
+                                        Solapur, Maharashtra, India
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        `;
+
+        const text = `
+        Congratulations! You are now an Admin at Solapur Gurukulam 🎉
+
+        Hello ${name || 'Admin'},
+
+        We are thrilled to announce that you have been promoted to Administrator at Solapur Gurukulam!
+
+        Your New Role:
+        - You now have administrative privileges
+        - You can manage content (mantras, shlokas, shotrams)
+        - You can help manage users and categories
+        - You play a vital role in our spiritual community
+
+        Your Responsibilities:
+        - Maintain and update spiritual content
+        - Guide and support community members
+        - Ensure the quality of teachings
+        - Help spread the wisdom of Sanatana Dharma
+
+        "Service to humanity is service to the divine." 🙏
+
+        With gratitude and blessings,
+        Solapur Gurukulam Team
+
+        © ${new Date().getFullYear()} Solapur Gurukulam. All rights reserved.
+        `;
+
+        return await sendEmail({ 
+            email, 
+            subject: '🎉 Congratulations! You are now an Admin at Solapur Gurukulam', 
+            html,
+            text
+        });
+    } catch (error) {
+        console.error('❌ Admin promotion email error:', error);
         throw error;
     }
 };
@@ -228,7 +457,6 @@ const sendPasswordResetEmail = async (email, token, name) => {
         </html>
         `;
 
-        // Plain text version as fallback
         const text = `
         Password Reset Request - Solapur Gurukulam
 
@@ -272,6 +500,8 @@ const testEmailConfig = async () => {
 module.exports = { 
     sendEmail, 
     sendVerificationEmail, 
+    sendWelcomeEmail,
+    sendAdminPromotionEmail,
     sendPasswordResetEmail,
     testEmailConfig 
 };
