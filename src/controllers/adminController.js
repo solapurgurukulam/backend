@@ -12,7 +12,10 @@ const getAllAdmins = async (req, res) => {
         }
 
         const admins = await User.find({
-            role: { $in: ['admin', 'super_admin'] }
+            $or: [
+                { role: { $in: ['admin', 'super_admin'] } },
+                { isBlocked: true }
+            ]
         }).select('-password');
 
         res.status(200).json({
