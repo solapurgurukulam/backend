@@ -1,225 +1,209 @@
 const nodemailer = require('nodemailer');
 
-// Create transporter with proper configuration
+// Create transporter using Gmail SMTP from .env
 const createTransporter = () => {
-    // For Ethereal email testing (development)
-    if (process.env.EMAIL_SERVICE === 'ethereal') {
-        return nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: {
-                user: process.env.ETHEREAL_USER || 'your_ethereal_user',
-                pass: process.env.ETHEREAL_PASS || 'your_ethereal_pass'
-            }
-        });
-    }
-    
-    // For Gmail with App Password
-    if (process.env.EMAIL_SERVICE === 'gmail') {
-        // ✅ FIX: Clean the password - remove spaces
-        const cleanPassword = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : '';
-        
-        return nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: cleanPassword  // ✅ Use cleaned password
-            }
-        });
-    }
-    
-    // For other SMTP services
     return nodemailer.createTransport({
         host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: process.env.EMAIL_PORT || 587,
-        secure: process.env.EMAIL_SECURE === 'true' || false,
+        port: parseInt(process.env.EMAIL_PORT) || 587,
+        secure: false, // TLS
         auth: {
             user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : '',  // ✅ Clean password
+            pass: process.env.EMAIL_PASS,
         },
-        connectionTimeout: 5000,
-        greetingTimeout: 5000,
-        socketTimeout: 5000,
+        tls: {
+            rejectUnauthorized: false,
+        },
     });
 };
 
-// Main email sending function
 const sendEmail = async (options) => {
+    const transporter = createTransporter();
+
+    const mailOptions = {
+        from: `"Solapur Gurukulum" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+        to: options.email,
+        subject: options.subject,
+        html: options.html,
+    };
+
     try {
-        console.log('📧 Preparing to send email to:', options.email);
-        console.log('📧 Email service:', process.env.EMAIL_SERVICE || 'default');
-        console.log('📧 Email user:', process.env.EMAIL_USER ? '✅ Set' : '❌ Not set');
-        
-        const transporter = createTransporter();
-        
-        // Verify connection configuration
-        try {
-            await transporter.verify();
-            console.log('✅ Email transporter verified successfully');
-        } catch (verifyError) {
-            console.error('❌ Email transporter verification failed:', verifyError.message);
-            throw new Error(`Email service not configured properly: ${verifyError.message}`);
-        }
-
-        const mailOptions = {
-            from: process.env.EMAIL_FROM || '"Solapur Gurukulam" <solapurgurukulam@gmail.com>',
-            to: options.email,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.html.replace(/<[^>]*>/g, ''),
-        };
-
         const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ Email sent successfully to ${options.email}: ${info.messageId}`);
-        
-        // For Ethereal email testing
-        if (process.env.NODE_ENV === 'development' && process.env.EMAIL_SERVICE === 'ethereal') {
-            console.log('📧 Preview URL:', nodemailer.getTestMessageUrl(info));
-        }
-        
+        console.log('✅ Email sent successfully:', info.messageId);
         return info;
     } catch (error) {
-        console.error('❌ Error sending email:', error);
-        console.error('❌ Error details:', {
-            message: error.message,
-            code: error.code,
-            response: error.response,
-            command: error.command
-        });
-        throw new Error(`Failed to send email: ${error.message}`);
-    }
-};
-
-// Send verification email
-const sendVerificationEmail = async (email, token, name) => {
-    try {
-        const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email/${token}`;
-        
-        const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Verify Your Email</title>
-        </head>
-        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f4; padding: 20px 0;">
-                <tr>
-                    <td align="center">
-                        <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 40px;">
-                            <tr>
-                                <td align="center" style="padding-bottom: 20px;">
-                                    <h1 style="color: #8B0000; margin: 0; font-size: 28px;">🕉️ Solapur Gurukulam</h1>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 20px 0;">
-                                    <h2 style="color: #333333; font-size: 24px; margin: 0 0 20px 0;">Welcome to Solapur Gurukulam!</h2>
-                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                        Hello <strong>${name || 'User'}</strong>,
-                                    </p>
-                                    <p style="color: #555555; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                        Thank you for registering with Solapur Gurukulam. Please verify your email address to complete your registration and start your spiritual journey with us.
-                                    </p>
-                                    <div style="text-align: center; margin: 30px 0;">
-                                        <a href="${verificationUrl}" style="display: inline-block; padding: 14px 40px; background-color: #8B0000; color: #ffffff; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">
-                                            ✅ Verify Email Address
-                                        </a>
-                                    </div>
-                                    <p style="color: #777777; font-size: 14px; line-height: 1.6; margin: 0 0 10px 0;">
-                                        Or copy and paste this link into your browser:
-                                    </p>
-                                    <p style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; word-break: break-all; font-size: 14px; color: #333; margin: 0 0 20px 0;">
-                                        ${verificationUrl}
-                                    </p>
-                                    <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 0 0 10px 0;">
-                                        ⏰ This verification link will expire in <strong>24 hours</strong>.
-                                    </p>
-                                    <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 0 0 10px 0;">
-                                        If you didn't create an account with Solapur Gurukulam, please ignore this email.
-                                    </p>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="border-top: 1px solid #e0e0e0; padding-top: 20px; text-align: center;">
-                                    <p style="color: #999999; font-size: 12px; margin: 0;">
-                                        &copy; ${new Date().getFullYear()} Solapur Gurukulam. All rights reserved.
-                                    </p>
-                                    <p style="color: #999999; font-size: 12px; margin: 5px 0 0 0;">
-                                        📧 solapurgurukulam@gmail.com
-                                    </p>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-        </body>
-        </html>
-        `;
-
-        const text = `
-        Welcome to Solapur Gurukulam!
-
-        Hello ${name || 'User'},
-
-        Thank you for registering with Solapur Gurukulam. Please verify your email address by visiting this link:
-        ${verificationUrl}
-
-        This verification link will expire in 24 hours.
-
-        If you didn't create an account with Solapur Gurukulam, please ignore this email.
-
-        © ${new Date().getFullYear()} Solapur Gurukulam. All rights reserved.
-        `;
-
-        return await sendEmail({ 
-            email, 
-            subject: 'Verify Your Email - Solapur Gurukulam', 
-            html,
-            text
-        });
-    } catch (error) {
-        console.error('❌ Verification email error:', error);
+        console.error('❌ Email send error:', error.message);
         throw error;
     }
 };
 
-// Send Welcome Email
+// Welcome email for newly registered users
 const sendWelcomeEmail = async (email, name) => {
-    // ... (keep your existing code - no changes needed)
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fffdf7; border-radius: 12px; overflow: hidden; border: 1px solid #f5e6c8;">
+      <div style="background: linear-gradient(135deg, #d97706, #ea580c); padding: 32px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">🕉️ Solapur Gurukulum</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">Spiritual Learning Platform</p>
+      </div>
+      <div style="padding: 32px;">
+        <h2 style="color: #92400e;">Welcome, ${name}! 🙏</h2>
+        <p style="color: #4b5563; line-height: 1.7;">
+          Namaste! We're delighted to welcome you to <strong>Solapur Gurukulum</strong>. 
+          Your journey into spiritual wisdom begins here.
+        </p>
+        <p style="color: #4b5563; line-height: 1.7;">
+          Explore our collection of <strong>Mantras</strong>, <strong>Shlokas</strong>, and <strong>Shotrams</strong> 
+          to enrich your spiritual life.
+        </p>
+        <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: 16px; border-radius: 8px; margin: 24px 0;">
+          <p style="color: #92400e; margin: 0; font-style: italic;">
+            "ॐ सर्वे भवन्तु सुखिनः।" — May all beings be happy.
+          </p>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          Please verify your email to unlock all features of the platform.
+        </p>
+        <p style="color: #4b5563; margin-top: 24px;">
+          With blessings,<br/>
+          <strong>Solapur Gurukulum Team</strong>
+        </p>
+      </div>
+      <div style="background: #f3f4f6; padding: 16px; text-align: center;">
+        <p style="color: #9ca3af; font-size: 12px; margin: 0;">© 2024 Solapur Gurukulum. All rights reserved.</p>
+      </div>
+    </div>
+    `;
+    return sendEmail({ email, subject: 'Welcome to Solapur Gurukulum! 🕉️', html });
 };
 
-// Send Admin Promotion Email
-const sendAdminPromotionEmail = async (email, name) => {
-    // ... (keep your existing code - no changes needed)
+// Email verification
+const sendVerificationEmail = async (email, token, name) => {
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fffdf7; border-radius: 12px; overflow: hidden; border: 1px solid #f5e6c8;">
+      <div style="background: linear-gradient(135deg, #d97706, #ea580c); padding: 32px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">🕉️ Solapur Gurukulum</h1>
+      </div>
+      <div style="padding: 32px;">
+        <h2 style="color: #92400e;">Verify Your Email, ${name}!</h2>
+        <p style="color: #4b5563; line-height: 1.7;">
+          Thank you for registering. Please verify your email address by clicking the button below:
+        </p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${verificationUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #d97706, #ea580c); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            ✅ Verify Email
+          </a>
+        </div>
+        <p style="color: #6b7280; font-size: 13px;">Or copy this link:<br/><a href="${verificationUrl}" style="color: #d97706; word-break: break-all;">${verificationUrl}</a></p>
+        <p style="color: #9ca3af; font-size: 12px;">This link will expire in 24 hours.</p>
+      </div>
+    </div>
+    `;
+    return sendEmail({ email, subject: 'Verify Your Email - Solapur Gurukulum', html });
 };
 
-// Send password reset email
+// Password reset
 const sendPasswordResetEmail = async (email, token, name) => {
-    // ... (keep your existing code - no changes needed)
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fffdf7; border-radius: 12px; overflow: hidden; border: 1px solid #f5e6c8;">
+      <div style="background: linear-gradient(135deg, #d97706, #ea580c); padding: 32px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">🕉️ Solapur Gurukulum</h1>
+      </div>
+      <div style="padding: 32px;">
+        <h2 style="color: #92400e;">Reset Your Password, ${name}</h2>
+        <p style="color: #4b5563; line-height: 1.7;">
+          You requested to reset your password. Click the button below to proceed:
+        </p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${resetUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #f59e0b, #f97316); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            🔑 Reset Password
+          </a>
+        </div>
+        <p style="color: #6b7280; font-size: 13px;">Or copy this link:<br/><a href="${resetUrl}" style="color: #d97706; word-break: break-all;">${resetUrl}</a></p>
+        <p style="color: #9ca3af; font-size: 12px;">This link will expire in 1 hour. If you didn't request this, please ignore this email.</p>
+      </div>
+    </div>
+    `;
+    return sendEmail({ email, subject: 'Reset Your Password - Solapur Gurukulum', html });
 };
 
-// For testing email configuration
-const testEmailConfig = async () => {
-    try {
-        const transporter = createTransporter();
-        await transporter.verify();
-        console.log('✅ Email configuration is valid and working!');
-        return true;
-    } catch (error) {
-        console.error('❌ Email configuration failed:', error.message);
-        return false;
-    }
+// Welcome email for newly added admin (new account created by super admin)
+const sendAdminWelcomeEmail = async (email, name, password) => {
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fffdf7; border-radius: 12px; overflow: hidden; border: 1px solid #f5e6c8;">
+      <div style="background: linear-gradient(135deg, #7c3aed, #a855f7); padding: 32px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">🛡️ Solapur Gurukulum</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">Admin Panel</p>
+      </div>
+      <div style="padding: 32px;">
+        <h2 style="color: #5b21b6;">Welcome, Admin ${name}! 🙏</h2>
+        <p style="color: #4b5563; line-height: 1.7;">
+          You have been added as an <strong>Administrator</strong> on Solapur Gurukulum platform by the Super Admin.
+        </p>
+        <div style="background: #f3f0ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 20px; margin: 24px 0;">
+          <p style="color: #5b21b6; font-weight: bold; margin: 0 0 8px;">Your Login Credentials:</p>
+          <p style="color: #4b5563; margin: 4px 0;"><strong>Email:</strong> ${email}</p>
+          <p style="color: #4b5563; margin: 4px 0;"><strong>Password:</strong> ${password}</p>
+          <p style="color: #9ca3af; font-size: 12px; margin: 12px 0 0;">Please change your password after first login for security.</p>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${loginUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            🔑 Login to Dashboard
+          </a>
+        </div>
+        <p style="color: #4b5563; margin-top: 24px;">
+          With blessings,<br/>
+          <strong>Solapur Gurukulum Team</strong>
+        </p>
+      </div>
+    </div>
+    `;
+    return sendEmail({ email, subject: '🛡️ You are now an Admin - Solapur Gurukulum', html });
 };
 
-module.exports = { 
-    sendEmail, 
-    sendVerificationEmail, 
+// Welcome email for existing user promoted to admin
+const sendAdminPromotionEmail = async (email, name) => {
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fffdf7; border-radius: 12px; overflow: hidden; border: 1px solid #f5e6c8;">
+      <div style="background: linear-gradient(135deg, #059669, #10b981); padding: 32px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 28px;">🌟 Solapur Gurukulum</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">Congratulations!</p>
+      </div>
+      <div style="padding: 32px;">
+        <h2 style="color: #065f46;">Congratulations, ${name}! 🎉</h2>
+        <p style="color: #4b5563; line-height: 1.7;">
+          Great news! You have been <strong>promoted to Admin</strong> on Solapur Gurukulum platform.
+        </p>
+        <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 16px; border-radius: 8px; margin: 24px 0;">
+          <p style="color: #065f46; margin: 0; font-weight: bold;">As an Admin, you can now:</p>
+          <ul style="color: #4b5563; margin: 8px 0 0; padding-left: 20px; line-height: 1.8;">
+            <li>Manage Mantras, Shlokas & Shotrams</li>
+            <li>Access the Admin Dashboard</li>
+            <li>Manage Categories & Content</li>
+          </ul>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${loginUrl}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #059669, #10b981); color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            🚀 Go to Dashboard
+          </a>
+        </div>
+        <p style="color: #4b5563;">
+          With blessings,<br/>
+          <strong>Solapur Gurukulum Team</strong>
+        </p>
+      </div>
+    </div>
+    `;
+    return sendEmail({ email, subject: '🌟 You are now an Admin - Solapur Gurukulum', html });
+};
+
+module.exports = {
+    sendEmail,
     sendWelcomeEmail,
-    sendAdminPromotionEmail,
+    sendVerificationEmail,
     sendPasswordResetEmail,
-    testEmailConfig 
+    sendAdminWelcomeEmail,
+    sendAdminPromotionEmail,
 };
