@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
 
 // Get all admins (super_admin only)
 const getAllAdmins = async (req, res) => {
@@ -68,7 +67,6 @@ const createAdmin = async (req, res) => {
 
         // Update user to admin role
         user.role = role === 'super_admin' ? 'super_admin' : 'admin';
-        user.isVerified = true; // Set as verified
         user.isBlocked = false; // Ensure not blocked
         await user.save();
 
@@ -78,7 +76,6 @@ const createAdmin = async (req, res) => {
             email: user.email,
             phone: user.phone,
             role: user.role,
-            isVerified: user.isVerified,
             isBlocked: user.isBlocked,
             createdAt: user.createdAt
         };
@@ -141,7 +138,6 @@ const updateAdmin = async (req, res) => {
             email: admin.email,
             phone: admin.phone,
             role: admin.role,
-            isVerified: admin.isVerified,
             isBlocked: admin.isBlocked
         };
 
@@ -192,7 +188,6 @@ const deleteAdmin = async (req, res) => {
 
         // Demote to regular user instead of deleting
         admin.role = 'user';
-        admin.isVerified = true;
         await admin.save();
 
         res.status(200).json({
