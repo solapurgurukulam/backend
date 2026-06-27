@@ -1,55 +1,29 @@
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// ─── Transporter ────────────────────────────────────────────────────────────
-const createTransporter = () => {
-    const pass = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
-    const user = (process.env.EMAIL_USER || '').trim();
-
-    if (!user || !pass) {
-        throw new Error('EMAIL_USER and EMAIL_PASS must be set in .env');
-    }
-
-    console.log('📧 Creating transporter | host:', process.env.EMAIL_HOST, '| port:', process.env.EMAIL_PORT, '| user:', user, '| pass length:', pass.length);
-
-    return nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.sendgrid.net',
-        port: parseInt(process.env.EMAIL_PORT) || 587,
-        secure: process.env.EMAIL_SECURE === 'true',
-        auth: { user, pass },
-        connectionTimeout: 30000,
-        greetingTimeout: 15000,
-        socketTimeout: 30000,
-        tls: { rejectUnauthorized: false },
-    });
-};
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // ─── Base send function ──────────────────────────────────────────────────────
 const sendEmail = async (options) => {
-    const transporter = createTransporter();
-
-    console.log('🔍 Verifying SMTP connection...');
-    try {
-        await transporter.verify();
-        console.log('✅ SMTP connection verified');
-    } catch (verifyErr) {
-        console.error('❌ SMTP verify failed:', verifyErr.message, '| code:', verifyErr.code);
-        throw verifyErr;
-    }
-
-    const mailOptions = {
-        from: `"Solapur Gurukulam" <${(process.env.EMAIL_FROM || process.env.EMAIL_USER || '').trim()}>`,
+    const msg = {
         to: options.email,
+        from: {
+            email: (process.env.EMAIL_FROM || '').trim(),
+            name: 'Solapur Gurukulam',
+        },
         subject: options.subject,
         html: options.html,
     };
 
-    console.log('📤 Sending email to:', options.email);
+    console.log('📤 Sending email via SendGrid API to:', options.email);
     try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log('✅ Email sent successfully | messageId:', info.messageId, '| response:', info.response);
-        return info;
+        const [response] = await sgMail.send(msg);
+        console.log('✅ Email sent | status:', response.statusCode);
+        return response;
     } catch (err) {
-        console.error('❌ sendMail failed:', err.message, '| code:', err.code, '| response:', err.response);
+        console.error('❌ SendGrid error:', err.message);
+        if (err.response) {
+            console.error('❌ SendGrid response body:', JSON.stringify(err.response.body));
+        }
         throw err;
     }
 };
@@ -57,9 +31,9 @@ const sendEmail = async (options) => {
 // ─── Test email config ───────────────────────────────────────────────────────
 const testEmailConfig = async () => {
     try {
-        const transporter = createTransporter();
-        await transporter.verify();
-        console.log('✅ Email config verified successfully');
+        if (!process.env.SENDGRID_API_KEY) throw new Error('SENDGRID_API_KEY not set');
+        if (!process.env.EMAIL_FROM) throw new Error('EMAIL_FROM not set');
+        console.log('✅ SendGrid config looks good');
         return true;
     } catch (err) {
         console.error('❌ Email config test failed:', err.message);
