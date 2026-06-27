@@ -12,18 +12,16 @@ const createTransporter = () => {
     console.log('📧 Creating transporter for:', user, '| Pass length:', pass.length);
 
     return nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
+        host: process.env.EMAIL_HOST || 'smtp.sendgrid.net',
+        port: parseInt(process.env.EMAIL_PORT) || 587,
+        secure: process.env.EMAIL_SECURE === 'true',
         auth: { user, pass },
         connectionTimeout: 60000,
         greetingTimeout: 30000,
         socketTimeout: 60000,
         tls: {
             rejectUnauthorized: false,
-            ciphers: 'SSLv3',
         },
-        debug: process.env.NODE_ENV !== 'production',
     });
 };
 
@@ -49,16 +47,11 @@ const sendEmail = async (options) => {
 
         if (err.message.includes('Invalid login') || err.message.includes('Username and Password') || err.code === 'EAUTH') {
             throw new Error(
-                'Gmail authentication failed. Steps to fix:\n' +
-                '1. Go to myaccount.google.com → Security → 2-Step Verification → Turn ON\n' +
-                '2. Then go to myaccount.google.com/apppasswords\n' +
-                '3. Generate a new App Password for "Mail"\n' +
-                '4. Copy the 16-char password (no spaces) into EMAIL_PASS in .env\n' +
-                '5. Restart the server'
+                'Authentication failed. Check EMAIL_USER and EMAIL_PASS in env variables.'
             );
         }
         if (err.code === 'ECONNECTION' || err.code === 'ETIMEDOUT') {
-            throw new Error('Cannot connect to Gmail SMTP. Check if your server/hosting allows outbound SMTP on port 465.');
+            throw new Error(`Cannot connect to SMTP host: ${process.env.EMAIL_HOST} on port ${process.env.EMAIL_PORT}. Check hosting SMTP restrictions.`);
         }
         throw err;
     }
@@ -109,7 +102,7 @@ const sendWelcomeEmail = async (email, name) => {
     return sendEmail({ email, subject: 'Welcome to Solapur Gurukulam!', html });
 };
 
-// ─── 2. Email verification (if you ever need it) ─────────────────────────────
+// ─── 2. Email verification ────────────────────────────────────────────────────
 const sendVerificationEmail = async (email, token, name) => {
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
     const html = `
@@ -174,7 +167,7 @@ const sendPasswordResetEmail = async (email, token, name) => {
     return sendEmail({ email, subject: 'Reset Your Password - Solapur Gurukulam', html });
 };
 
-// ─── 4. Admin welcome email (super admin adds admin) ────────────────────────
+// ─── 4. Admin welcome email ──────────────────────────────────────────────────
 const sendAdminPromotionEmail = async (email, name) => {
     const loginUrl = `${process.env.FRONTEND_URL}/login`;
     const html = `
