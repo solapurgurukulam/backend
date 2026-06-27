@@ -1,4 +1,3 @@
-// backend/src/controllers/authController.js
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
@@ -33,7 +32,6 @@ const generateTokens = async (userId) => {
   return { accessToken, refreshToken };
 };
 
-// ✅ Register - Auto Verify (No Email Verification)
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -48,7 +46,6 @@ exports.register = async (req, res) => {
       });
     }
 
-    // ✅ Auto verify user - No verification token needed
     const user = await User.create({
       name,
       email,
@@ -61,7 +58,6 @@ exports.register = async (req, res) => {
 
     console.log("✅ User created and auto-verified:", user._id);
 
-    // ✅ Send ONLY welcome email (no verification email)
     try {
       await sendWelcomeEmail(email, name);
       console.log("✅ Welcome email sent to:", email);
@@ -97,7 +93,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// ✅ Login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -159,7 +154,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// ✅ Verify Email (Kept for backward compatibility)
 exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
@@ -197,7 +191,6 @@ exports.verifyEmail = async (req, res) => {
   }
 };
 
-// ✅ Forgot Password
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -219,21 +212,18 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
 
     user.passwordResetToken = resetToken;
-    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
     console.log("✅ Reset token saved for:", user.email);
 
-    // Send reset email
     try {
       await sendPasswordResetEmail(email, resetToken, user.name);
       console.log("✅ Password reset email sent to:", email);
     } catch (emailError) {
-      // If email fails, clear the token so user isn't stuck
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
       await user.save({ validateBeforeSave: false });
@@ -260,7 +250,6 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-// ✅ Reset Password
 exports.resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
@@ -314,7 +303,6 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// ✅ Get Profile
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
@@ -328,7 +316,6 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-// ✅ Update Profile
 exports.updateProfile = async (req, res) => {
   try {
     const { name, phone } = req.body;
@@ -355,7 +342,6 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// ✅ Change Password
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -398,7 +384,6 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-// ✅ Logout
 exports.logout = async (req, res) => {
   try {
     const refreshToken = req.body.refreshToken || req.cookies?.refreshToken;
@@ -417,7 +402,6 @@ exports.logout = async (req, res) => {
   }
 };
 
-// ✅ Refresh Token
 exports.refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;

@@ -1,7 +1,6 @@
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
+const { sendAdminPromotionEmail } = require('../utils/sendEmail');
 
-// Get all admins (super_admin only)
 const getAllAdmins = async (req, res) => {
     try {
         if (req.user.role !== 'super_admin') {
@@ -28,7 +27,6 @@ const getAllAdmins = async (req, res) => {
     }
 };
 
-// Search user by email or phone (ADDED FOR FRONTEND SYNC)
 const searchUser = async (req, res) => {
     try {
         const { email, phone } = req.query;
@@ -67,7 +65,6 @@ const searchUser = async (req, res) => {
     }
 };
 
-// Create new admin from scratch (super_admin only)
 const createAdmin = async (req, res) => {
     try {
         const { name, email, phone, password, role } = req.body;
@@ -90,16 +87,22 @@ const createAdmin = async (req, res) => {
             });
         }
 
-        // Using plain password here because your User model pre-save hook handles bcrypt hashing
         const user = await User.create({
             name: name.trim(),
             email: email.toLowerCase().trim(),
             phone: phone || '',
-            password: password, 
+            password: password,
             role: role === 'super_admin' ? 'super_admin' : 'admin',
             isVerified: true,
             isBlocked: false
         });
+
+        try {
+            await sendAdminPromotionEmail(user.email, user.name);
+            console.log(`✅ Admin promotion email sent to: ${user.email}`);
+        } catch (emailError) {
+            console.error('❌ Admin promotion email failed:', emailError.message);
+        }
 
         res.status(201).json({
             success: true,
@@ -121,7 +124,6 @@ const createAdmin = async (req, res) => {
     }
 };
 
-// Promote existing user to admin (ADDED FOR FRONTEND SYNC)
 const promoteUser = async (req, res) => {
     try {
         const { email, phone, role } = req.body;
@@ -156,6 +158,13 @@ const promoteUser = async (req, res) => {
         user.role = role || 'admin';
         await user.save();
 
+        try {
+            await sendAdminPromotionEmail(user.email, user.name);
+            console.log(`✅ Admin promotion email sent to: ${user.email}`);
+        } catch (emailError) {
+            console.error('❌ Admin promotion email failed:', emailError.message);
+        }
+
         res.status(200).json({
             success: true,
             message: 'User promoted to admin successfully'
@@ -170,7 +179,6 @@ const promoteUser = async (req, res) => {
     }
 };
 
-// Update admin
 const updateAdmin = async (req, res) => {
     try {
         const { name, phone, role } = req.body;
@@ -205,7 +213,6 @@ const updateAdmin = async (req, res) => {
     }
 };
 
-// Delete/Demote admin
 const deleteAdmin = async (req, res) => {
     try {
         const adminId = req.params.id;
@@ -220,7 +227,6 @@ const deleteAdmin = async (req, res) => {
             }
         }
 
-        // Instead of deleting from DB entirely, we demote to user (safer)
         admin.role = 'user';
         await admin.save();
 
@@ -234,7 +240,6 @@ const deleteAdmin = async (req, res) => {
     }
 };
 
-// Block admin
 const blockAdmin = async (req, res) => {
     try {
         const adminId = req.params.id;
@@ -251,7 +256,6 @@ const blockAdmin = async (req, res) => {
     }
 };
 
-// Unblock admin
 const unblockAdmin = async (req, res) => {
     try {
         const adminId = req.params.id;

@@ -63,7 +63,7 @@ const sendWelcomeEmail = async (email, name) => {
             "OM Sarve Bhavantu Sukhinah" — May all beings be happy.
           </p>
         </div>
-        <p style="color:#6b7280;font-size:14px;">Please verify your email to unlock all features.</p>
+        <p style="color:#6b7280;font-size:14px;">Start exploring the spiritual wisdom today.</p>
         <p style="color:#4b5563;margin-top:24px;">With blessings,<br/><strong>Solapur Gurukulum Team</strong></p>
       </div>
       <div style="background:#f3f4f6;padding:16px;text-align:center;">
@@ -121,36 +121,6 @@ const sendPasswordResetEmail = async (email, token, name) => {
     return sendEmail({ email, subject: 'Reset Your Password - Solapur Gurukulum', html });
 };
 
-const sendAdminWelcomeEmail = async (email, name, password) => {
-    const loginUrl = `${process.env.FRONTEND_URL}/login`;
-    const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fffdf7;border-radius:12px;overflow:hidden;border:1px solid #f5e6c8;">
-      <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;text-align:center;">
-        <h1 style="color:white;margin:0;font-size:28px;">Solapur Gurukulum</h1>
-        <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;">Admin Panel</p>
-      </div>
-      <div style="padding:32px;">
-        <h2 style="color:#5b21b6;">Welcome, Admin ${name}!</h2>
-        <p style="color:#4b5563;line-height:1.7;">
-          You have been added as an <strong>Administrator</strong> by the Super Admin.
-        </p>
-        <div style="background:#f3f0ff;border:1px solid #c4b5fd;border-radius:8px;padding:20px;margin:24px 0;">
-          <p style="color:#5b21b6;font-weight:bold;margin:0 0 8px;">Your Login Credentials:</p>
-          <p style="color:#4b5563;margin:4px 0;"><strong>Email:</strong> ${email}</p>
-          <p style="color:#4b5563;margin:4px 0;"><strong>Password:</strong> ${password}</p>
-          <p style="color:#9ca3af;font-size:12px;margin:12px 0 0;">Please change your password after first login.</p>
-        </div>
-        <div style="text-align:center;margin:24px 0;">
-          <a href="${loginUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;">
-            Login to Dashboard
-          </a>
-        </div>
-        <p style="color:#4b5563;margin-top:24px;">With blessings,<br/><strong>Solapur Gurukulum Team</strong></p>
-      </div>
-    </div>`;
-    return sendEmail({ email, subject: 'You are now an Admin - Solapur Gurukulum', html });
-};
-
 const sendAdminPromotionEmail = async (email, name) => {
     const loginUrl = `${process.env.FRONTEND_URL}/login`;
     const html = `
@@ -186,6 +156,5 @@ module.exports = {
     sendWelcomeEmail,
     sendVerificationEmail,
     sendPasswordResetEmail,
-    sendAdminWelcomeEmail,
     sendAdminPromotionEmail,
 };
