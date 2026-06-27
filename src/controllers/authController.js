@@ -33,7 +33,7 @@ const generateTokens = async (userId) => {
   return { accessToken, refreshToken };
 };
 
-// ✅ Register
+// ✅ Register - Auto Verify (No Email Verification)
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -48,40 +48,32 @@ exports.register = async (req, res) => {
       });
     }
 
-    const emailVerificationToken = crypto.randomBytes(32).toString("hex");
-    const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
+    // ✅ Auto verify user - No verification token needed
     const user = await User.create({
       name,
       email,
       phone,
       password,
-      emailVerificationToken,
-      emailVerificationExpires,
+      isVerified: true,
+      emailVerificationToken: undefined,
+      emailVerificationExpires: undefined,
     });
 
-    console.log("✅ User created:", user._id);
+    console.log("✅ User created and auto-verified:", user._id);
 
-    // Send welcome email + verification email (won't break if fails)
-    Promise.allSettled([
-      sendWelcomeEmail(email, name),
-      sendVerificationEmail(email, emailVerificationToken, name),
-    ]).then((results) => {
-      results.forEach((result, i) => {
-        const label = i === 0 ? "Welcome email" : "Verification email";
-        if (result.status === "fulfilled") {
-          console.log(`✅ ${label} sent`);
-        } else {
-          console.warn(`⚠️ ${label} failed:`, result.reason?.message);
-        }
-      });
-    });
+    // ✅ Send ONLY welcome email (no verification email)
+    try {
+      await sendWelcomeEmail(email, name);
+      console.log("✅ Welcome email sent to:", email);
+    } catch (welcomeError) {
+      console.error("❌ Welcome email failed:", welcomeError.message);
+    }
 
     const { accessToken, refreshToken } = await generateTokens(user._id);
 
     res.status(201).json({
       success: true,
-      message: "Registration successful. Please check your email to verify your account.",
+      message: "Registration successful! Welcome to Solapur Gurukulum.",
       data: {
         user: {
           id: user._id,
@@ -167,7 +159,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// ✅ Verify Email
+// ✅ Verify Email (Kept for backward compatibility)
 exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
@@ -236,7 +228,7 @@ exports.forgotPassword = async (req, res) => {
 
     console.log("✅ Reset token saved for:", user.email);
 
-    // Send reset email - REQUIRED to actually send
+    // Send reset email
     try {
       await sendPasswordResetEmail(email, resetToken, user.name);
       console.log("✅ Password reset email sent to:", email);
@@ -331,6 +323,7 @@ exports.getProfile = async (req, res) => {
       data: user,
     });
   } catch (error) {
+    console.error("❌ Get profile error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
@@ -357,6 +350,7 @@ exports.updateProfile = async (req, res) => {
       data: user,
     });
   } catch (error) {
+    console.error("❌ Update profile error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
@@ -399,6 +393,7 @@ exports.changePassword = async (req, res) => {
       message: "Password changed successfully",
     });
   } catch (error) {
+    console.error("❌ Change password error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
@@ -417,6 +412,7 @@ exports.logout = async (req, res) => {
       message: "Logged out successfully",
     });
   } catch (error) {
+    console.error("❌ Logout error:", error);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
@@ -447,6 +443,7 @@ exports.refreshToken = async (req, res) => {
 
     res.status(200).json({ success: true, data: { accessToken } });
   } catch (error) {
+    console.error("❌ Refresh token error:", error);
     res.status(401).json({ success: false, message: "Invalid refresh token", error: error.message });
   }
 };
