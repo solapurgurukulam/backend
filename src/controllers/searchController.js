@@ -1,6 +1,6 @@
 const Mantra = require('../models/Mantra');
 const Shloka = require('../models/Shloka');
-const Shotram = require('../models/Shotram');   // ✅ ADD THIS
+const Shotram = require('../models/Shotram');
 const Category = require('../models/Category');
 
 exports.globalSearch = async (req, res) => {
@@ -12,7 +12,7 @@ exports.globalSearch = async (req, res) => {
 
         const searchRegex = new RegExp(q, 'i');
 
-        const [mantras, shlokas, shotrams, categories] = await Promise.all([  // ✅ shotrams add
+        const [mantras, shlokas, shotrams, categories] = await Promise.all([
             Mantra.find({
                 $or: [{ name: searchRegex }, { benefits: searchRegex }],
                 isActive: true,
@@ -25,9 +25,8 @@ exports.globalSearch = async (req, res) => {
                 isActive: true,
             })
                 .limit(5)
-                .populate('mantra', 'name slug'),
+                .populate('category', 'name slug'),  // ✅ FIXED: 'mantra' → 'category'
 
-            // ✅ NEW: Shotrams search
             Shotram.find({
                 $or: [{ name: searchRegex }, { sanskrit: searchRegex }, { hindi: searchRegex }, { english: searchRegex }],
                 isActive: true,
@@ -43,19 +42,14 @@ exports.globalSearch = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: {
-                mantras,
-                shlokas,
-                shotrams,   // ✅ ADD THIS
-                categories,
-            },
+            data: { mantras, shlokas, shotrams, categories },
         });
     } catch (error) {
+        console.error('globalSearch error:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
-// baaki exports same rehte hain...
 exports.searchMantras = async (req, res) => {
     try {
         const { q } = req.query;
@@ -73,12 +67,10 @@ exports.searchMantras = async (req, res) => {
             isActive: true,
         };
 
-        const mantras = await Mantra.find(query)
-            .populate('category', 'name slug')
-            .skip(skip)
-            .limit(limit);
-
-        const total = await Mantra.countDocuments(query);
+        const [mantras, total] = await Promise.all([
+            Mantra.find(query).populate('category', 'name slug').skip(skip).limit(limit),
+            Mantra.countDocuments(query),
+        ]);
 
         res.status(200).json({
             success: true,
@@ -107,12 +99,10 @@ exports.searchShlokas = async (req, res) => {
             isActive: true,
         };
 
-        const shlokas = await Shloka.find(query)
-            .populate('mantra', 'name slug')
-            .skip(skip)
-            .limit(limit);
-
-        const total = await Shloka.countDocuments(query);
+        const [shlokas, total] = await Promise.all([
+            Shloka.find(query).populate('category', 'name slug').skip(skip).limit(limit),  // ✅ FIXED
+            Shloka.countDocuments(query),
+        ]);
 
         res.status(200).json({
             success: true,
