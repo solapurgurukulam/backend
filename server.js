@@ -88,20 +88,20 @@ if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 }
 
-// Cache-control
+// Cache-control  
 app.use("/api/categories", (req, res, next) => {
   if (req.method === "GET")
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "no-store");  
   next();
 });
 app.use("/api/mantras", (req, res, next) => {
   if (req.method === "GET")
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "no-store"); 
   next();
 });
 app.use("/api/shlokas", (req, res, next) => {
   if (req.method === "GET")
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.setHeader("Cache-Control", "no-store");  
   next();
 });
 
