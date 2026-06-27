@@ -1,16 +1,6 @@
 const nodemailer = require('nodemailer');
 
-/**
- * Creates a Gmail SMTP transporter.
- *
- * IMPORTANT — common reasons Gmail rejects auth:
- *  1. App password stored WITH spaces in .env  → remove spaces: ovsdqvkeoqnbehsf
- *  2. 2-Step Verification turned off           → must be ON for App Passwords to work
- *  3. App password revoked / expired           → regenerate at myaccount.google.com/apppasswords
- *  4. "Less secure app access" blocked         → use App Password instead of real password
- */
 const createTransporter = () => {
-    // Strip any spaces from the app password (common .env copy-paste mistake)
     const pass = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
     const user = (process.env.EMAIL_USER || '').trim();
 
@@ -19,7 +9,7 @@ const createTransporter = () => {
     }
 
     return nodemailer.createTransport({
-        service: 'gmail',   // let nodemailer pick the right host/port/secure for Gmail
+        service: 'gmail',
         auth: { user, pass },
         connectionTimeout: 15000,
         greetingTimeout: 10000,
@@ -43,19 +33,15 @@ const sendEmail = async (options) => {
         return info;
     } catch (err) {
         console.error('❌ Email send error:', err.message);
-        // Surface a helpful message for the most common failure
         if (err.message.includes('Invalid login') || err.message.includes('Username and Password')) {
             throw new Error(
-                'Gmail authentication failed. ' +
-                'Check: (1) EMAIL_PASS has no spaces, (2) 2-Step Verification is ON, ' +
-                '(3) App Password is valid at myaccount.google.com/apppasswords'
+                'Gmail authentication failed. Check: (1) EMAIL_PASS has no spaces, (2) 2-Step Verification is ON, (3) App Password is valid at myaccount.google.com/apppasswords'
             );
         }
         throw err;
     }
 };
 
-// ─── Welcome email for newly registered users ────────────────────────────────
 const sendWelcomeEmail = async (email, name) => {
     const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fffdf7;border-radius:12px;overflow:hidden;border:1px solid #f5e6c8;">
@@ -87,7 +73,6 @@ const sendWelcomeEmail = async (email, name) => {
     return sendEmail({ email, subject: 'Welcome to Solapur Gurukulum!', html });
 };
 
-// ─── Email verification ───────────────────────────────────────────────────────
 const sendVerificationEmail = async (email, token, name) => {
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
     const html = `
@@ -112,7 +97,6 @@ const sendVerificationEmail = async (email, token, name) => {
     return sendEmail({ email, subject: 'Verify Your Email - Solapur Gurukulum', html });
 };
 
-// ─── Password reset ───────────────────────────────────────────────────────────
 const sendPasswordResetEmail = async (email, token, name) => {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
     const html = `
@@ -137,7 +121,6 @@ const sendPasswordResetEmail = async (email, token, name) => {
     return sendEmail({ email, subject: 'Reset Your Password - Solapur Gurukulum', html });
 };
 
-// ─── Admin welcome (new account created by super admin) ──────────────────────
 const sendAdminWelcomeEmail = async (email, name, password) => {
     const loginUrl = `${process.env.FRONTEND_URL}/login`;
     const html = `
@@ -168,7 +151,6 @@ const sendAdminWelcomeEmail = async (email, name, password) => {
     return sendEmail({ email, subject: 'You are now an Admin - Solapur Gurukulum', html });
 };
 
-// ─── Admin promotion (existing user promoted to admin) ───────────────────────
 const sendAdminPromotionEmail = async (email, name) => {
     const loginUrl = `${process.env.FRONTEND_URL}/login`;
     const html = `
