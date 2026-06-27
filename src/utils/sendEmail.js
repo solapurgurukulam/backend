@@ -9,15 +9,21 @@ const createTransporter = () => {
         throw new Error('EMAIL_USER and EMAIL_PASS must be set in .env');
     }
 
+    console.log('📧 Creating transporter for:', user, '| Pass length:', pass.length);
+
     return nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 465,
         secure: true,
         auth: { user, pass },
-        connectionTimeout: 30000,
+        connectionTimeout: 60000,
         greetingTimeout: 30000,
-        socketTimeout: 30000,
-        tls: { rejectUnauthorized: false }
+        socketTimeout: 60000,
+        tls: {
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3',
+        },
+        debug: process.env.NODE_ENV !== 'production',
     });
 };
 
@@ -38,12 +44,21 @@ const sendEmail = async (options) => {
         return info;
     } catch (err) {
         console.error('❌ Email send error:', err.message);
-        if (err.message.includes('Invalid login') || err.message.includes('Username and Password')) {
+        console.error('❌ Error code:', err.code);
+        console.error('❌ Response:', err.response);
+
+        if (err.message.includes('Invalid login') || err.message.includes('Username and Password') || err.code === 'EAUTH') {
             throw new Error(
-                'Gmail authentication failed. Check: (1) EMAIL_PASS has no spaces, ' +
-                '(2) 2-Step Verification is ON, ' +
-                '(3) App Password is valid at myaccount.google.com/apppasswords'
+                'Gmail authentication failed. Steps to fix:\n' +
+                '1. Go to myaccount.google.com → Security → 2-Step Verification → Turn ON\n' +
+                '2. Then go to myaccount.google.com/apppasswords\n' +
+                '3. Generate a new App Password for "Mail"\n' +
+                '4. Copy the 16-char password (no spaces) into EMAIL_PASS in .env\n' +
+                '5. Restart the server'
             );
+        }
+        if (err.code === 'ECONNECTION' || err.code === 'ETIMEDOUT') {
+            throw new Error('Cannot connect to Gmail SMTP. Check if your server/hosting allows outbound SMTP on port 465.');
         }
         throw err;
     }
