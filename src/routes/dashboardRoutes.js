@@ -6,6 +6,7 @@ const {
     getTopMantras,
     getTopShlokas,
     getUserAnalytics,
+    getReadAnalytics,
 } = require('../controllers/dashboardController');
 
 router.use(protect);
@@ -15,5 +16,6 @@ router.get('/stats', getStats);
 router.get('/top-mantras', getTopMantras);
 router.get('/top-shlokas', getTopShlokas);
 router.get('/user-analytics', getUserAnalytics);
+router.get('/read-analytics', getReadAnalytics); 
 
 module.exports = router;
