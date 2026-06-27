@@ -113,3 +113,50 @@ exports.getUserAnalytics = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
+
+exports.getReadAnalytics = async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+
+        const [topMantras, topShlokas, topShotrams] = await Promise.all([
+            Mantra.find({ isActive: true }).sort({ views: -1 }).limit(5).select('name views'),
+            Shloka.find({ isActive: true }).sort({ views: -1 }).limit(5).select('name views'),
+            Shotram.find({ isActive: true }).sort({ views: -1 }).limit(5).select('name views'),
+        ]);
+
+        // Views chart data — content type wise
+        const views = [
+            {
+                name: 'Mantras',
+                mantras: topMantras.reduce((sum, m) => sum + (m.views || 0), 0),
+                shlokas: 0,
+            },
+            {
+                name: 'Shlokas',
+                mantras: 0,
+                shlokas: topShlokas.reduce((sum, s) => sum + (s.views || 0), 0),
+            },
+            {
+                name: 'Shotrams',
+                mantras: 0,
+                shlokas: topShotrams.reduce((sum, s) => sum + (s.views || 0), 0),
+            },
+        ];
+
+        // Recent activity — combined top 5
+        const recent = [
+            ...topMantras.map(m => ({ content: `Mantra: ${m.name}`, type: 'view', views: m.views || 0 })),
+            ...topShlokas.map(s => ({ content: `Shloka: ${s.name}`, type: 'read', views: s.views || 0 })),
+            ...topShotrams.map(s => ({ content: `Shotram: ${s.name}`, type: 'listen', views: s.views || 0 })),
+        ]
+            .sort((a, b) => b.views - a.views)
+            .slice(0, 5);
+
+        res.status(200).json({ success: true, data: { views, recent } });
+    } catch (error) {
+        console.error('getReadAnalytics error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};
