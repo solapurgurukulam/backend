@@ -163,6 +163,10 @@ exports.createMantra = async (req, res) => {
             category, isFeatured, meaning, audioUrl, order
         } = req.body;
 
+        if (!name) {
+            return res.status(400).json({ success: false, message: 'Mantra name is required' });
+        }
+
         const slug = generateSlug(name);
 
         const existingMantra = await Mantra.findOne({ $or: [{ name }, { slug }] });
@@ -170,10 +174,22 @@ exports.createMantra = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Mantra name already exists' });
         }
 
+        // ✅ FIXED: Image upload is optional — if Cloudinary not configured, skip silently
         let imageUrl = null;
         if (req.file) {
-            const result = await uploadToCloudinary(req.file.buffer, 'mantras');
-            imageUrl = result.secure_url;
+            const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+            const isCloudinaryConfigured = cloudName && cloudName !== 'your_name' && cloudName !== '';
+            if (isCloudinaryConfigured) {
+                try {
+                    const result = await uploadToCloudinary(req.file.buffer, 'mantras');
+                    imageUrl = result.secure_url;
+                } catch (uploadError) {
+                    console.error('Cloudinary upload failed (image skipped):', uploadError.message);
+                    // Don't crash — just skip image
+                }
+            } else {
+                console.warn('Cloudinary not configured — image upload skipped');
+            }
         }
 
         const mantra = await Mantra.create({
@@ -202,6 +218,7 @@ exports.createMantra = async (req, res) => {
 
         res.status(201).json({ success: true, message: 'Mantra created', data: mantra });
     } catch (error) {
+        console.error('createMantra error:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
