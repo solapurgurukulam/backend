@@ -220,26 +220,21 @@ exports.forgotPassword = async (req, res) => {
 
     console.log("✅ Reset token saved for:", user.email);
 
-    try {
-      await sendPasswordResetEmail(email, resetToken, user.name);
-      console.log("✅ Password reset email sent to:", email);
-    } catch (emailError) {
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-
-      console.error("❌ Email sending failed:", emailError.message);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send reset email. Please check email configuration.",
-        error: emailError.message,
-      });
-    }
-
+    // Respond immediately — don't make user wait for email
     res.status(200).json({
       success: true,
       message: "Password reset link has been sent to your email address",
     });
+
+    // Send email in background
+    sendPasswordResetEmail(email, resetToken, user.name)
+      .then(() => console.log("✅ Password reset email sent to:", email))
+      .catch(async (emailError) => {
+        console.error("❌ Email sending failed:", emailError.message);
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save({ validateBeforeSave: false }).catch(() => {});
+      });
   } catch (error) {
     console.error("❌ Forgot password error:", error);
     res.status(500).json({
