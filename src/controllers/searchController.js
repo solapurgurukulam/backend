@@ -1,5 +1,6 @@
 const Mantra = require('../models/Mantra');
 const Shloka = require('../models/Shloka');
+const Shotram = require('../models/Shotram');   // ✅ ADD THIS
 const Category = require('../models/Category');
 
 exports.globalSearch = async (req, res) => {
@@ -11,19 +12,29 @@ exports.globalSearch = async (req, res) => {
 
         const searchRegex = new RegExp(q, 'i');
 
-        const [mantras, shlokas, categories] = await Promise.all([
+        const [mantras, shlokas, shotrams, categories] = await Promise.all([  // ✅ shotrams add
             Mantra.find({
                 $or: [{ name: searchRegex }, { benefits: searchRegex }],
                 isActive: true,
             })
                 .limit(5)
                 .populate('category', 'name slug'),
+
             Shloka.find({
                 $or: [{ name: searchRegex }, { sanskrit: searchRegex }, { hindi: searchRegex }, { english: searchRegex }],
                 isActive: true,
             })
                 .limit(5)
                 .populate('mantra', 'name slug'),
+
+            // ✅ NEW: Shotrams search
+            Shotram.find({
+                $or: [{ name: searchRegex }, { sanskrit: searchRegex }, { hindi: searchRegex }, { english: searchRegex }],
+                isActive: true,
+            })
+                .limit(5)
+                .populate('category', 'name slug'),
+
             Category.find({
                 $or: [{ name: searchRegex }, { description: searchRegex }],
                 isActive: true,
@@ -35,6 +46,7 @@ exports.globalSearch = async (req, res) => {
             data: {
                 mantras,
                 shlokas,
+                shotrams,   // ✅ ADD THIS
                 categories,
             },
         });
@@ -43,6 +55,7 @@ exports.globalSearch = async (req, res) => {
     }
 };
 
+// baaki exports same rehte hain...
 exports.searchMantras = async (req, res) => {
     try {
         const { q } = req.query;
@@ -70,12 +83,7 @@ exports.searchMantras = async (req, res) => {
         res.status(200).json({
             success: true,
             data: mantras,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit),
-            },
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) },
         });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -109,12 +117,7 @@ exports.searchShlokas = async (req, res) => {
         res.status(200).json({
             success: true,
             data: shlokas,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit),
-            },
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) },
         });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
