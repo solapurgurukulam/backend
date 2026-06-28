@@ -19,8 +19,8 @@ const app = require("./src/app");
 // ============== CORS CONFIGURATION ==============
 const allowedOrigins = [
   process.env.FRONTEND_URL,           // e.g. https://frontend-beta-six-57.vercel.app
-  "http://localhost:3000",
-  "http://localhost:5173",
+  "http://solapurgurukulam.com",
+  
 ].filter(Boolean);
 
 const corsOptions = {
