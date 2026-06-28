@@ -18,14 +18,15 @@ const app = require("./src/app");
 
 // ============== CORS CONFIGURATION ==============
 const allowedOrigins = [
-  process.env.FRONTEND_URL,           // e.g. https://frontend-beta-six-57.vercel.app
+  process.env.FRONTEND_URL,
+  "https://solapurgurukulam.com",
+  "https://www.solapurgurukulam.com",
   "http://solapurgurukulam.com",
-  
+  "http://www.solapurgurukulam.com",
 ].filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, server-to-server, Postman)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
     console.warn(`❌ CORS blocked request from origin: ${origin}`);
