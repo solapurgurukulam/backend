@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Mantra = require('../models/Mantra');
 const Shloka = require('../models/Shloka');
+const Shotram = require('../models/Shotram');
 const Category = require('../models/Category');
 
 exports.getStats = async (req, res) => {
